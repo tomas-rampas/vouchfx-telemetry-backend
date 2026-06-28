@@ -1,0 +1,81 @@
+# ────────────────────────────────────────────────────────────────────────────────
+# ci.yml — Continuous integration: restore, build, format-check, unit tests.
+#
+# Triggers:
+#   • push to main
+#   • pull_request targeting main
+#
+# This job does NOT start Docker.  Testcontainers-based integration tests live in
+# integration.yml and run on a separate schedule.
+#
+# SDK version is read from global.json (8.0.400, rollForward: latestFeature).
+# NuGet packages are cached keyed on all .csproj files + global.json so a
+# dependency change busts the cache while a source-only change reuses it.
+# ────────────────────────────────────────────────────────────────────────────────
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build, format-check, unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup .NET (reads version from global.json)
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version-file: global.json
+
+      # Cache NuGet packages.  The key is based on the OS, all .csproj files,
+      # and global.json so a new dependency or SDK pin busts the cache.
+      - name: Cache NuGet packages
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Restore
+        run: dotnet restore Vouchfx.Telemetry.Backend.sln
+
+      # Build the whole solution with warnings-as-errors enforced by
+      # Directory.Build.props (<TreatWarningsAsErrors>true</TreatWarningsAsErrors>).
+      # The -warnaserror flag is redundant but makes the intent explicit in CI.
+      - name: Build (Release, warnings as errors)
+        run: dotnet build Vouchfx.Telemetry.Backend.sln -c Release --no-restore -warnaserror
+
+      # Verify formatting matches .editorconfig.  --verify-no-changes exits 1
+      # if any file needs reformatting, blocking the PR.
+      - name: Format check
+        run: dotnet format --verify-no-changes Vouchfx.Telemetry.Backend.sln
+
+      # Run unit tests only (no Docker required).
+      - name: Unit tests
+        run: >
+          dotnet test
+          tests/Vouchfx.Telemetry.Backend.UnitTests
+          -c Release
+          --no-build
+          --logger "trx;LogFileName=unit-results.trx"
+          --logger "console;verbosity=normal"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: unit-test-results
+          path: '**/*.trx'
+          retention-days: 7

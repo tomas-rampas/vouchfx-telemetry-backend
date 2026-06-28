@@ -1,0 +1,58 @@
+# .dockerignore — keeps the Docker build context lean.
+# Only the files needed by the Dockerfile's COPY instructions are required:
+#   global.json, Directory.Build.props, and src/Vouchfx.Telemetry.Backend/
+
+# .NET build artefacts — the multi-stage build compiles from source inside
+# the SDK container, so local bin/obj directories are irrelevant and large.
+**/bin/
+**/obj/
+
+# Test projects — not part of the service image.
+tests/
+
+# IaC, docs, scripts — not needed inside the container.
+deploy/
+docs/
+scripts/
+
+# Git metadata.
+.git/
+.gitattributes
+.gitignore
+.gitmodules
+
+# GitHub Actions / CI.
+.github/
+
+# IDE and local tooling.
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+*.code-workspace
+
+# Secrets — NEVER bake credentials into an image.
+*.secrets
+secrets.json
+secrets.local.*
+.env
+.env.*
+!.env.example
+appsettings.*.local.json
+
+# OS noise.
+.DS_Store
+._*
+Thumbs.db
+desktop.ini
+
+# Logs and temporaries.
+*.log
+*.tmp
+*.swp
+*~
+
+# Agent scratch (local development only).
+.claude/
+.serena/

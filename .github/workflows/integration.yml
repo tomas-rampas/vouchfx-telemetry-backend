@@ -1,0 +1,85 @@
+# ────────────────────────────────────────────────────────────────────────────────
+# integration.yml — Integration tests (requires Docker).
+#
+# Testcontainers.PostgreSql spins up a real PostgreSQL 16 container at test
+# time; the ubuntu-latest GitHub-hosted runner provides a Docker engine out of
+# the box.  Self-hosted runners must have Docker installed and the runner user
+# must be a member of the docker group.
+#
+# Triggers:
+#   • pull_request targeting main  — runs alongside (not blocking) the CI job.
+#   • schedule: nightly at 02:00 UTC — catches regressions between PRs.
+#   • workflow_dispatch — manual trigger for ad-hoc runs.
+#
+# NOTE: The integration tests project (tests/Vouchfx.Telemetry.Backend.IntegrationTests)
+# is planned but not yet checked in.  The test step guards against a missing
+# project directory and skips gracefully until it is created.
+# ────────────────────────────────────────────────────────────────────────────────
+name: Integration Tests
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    # Nightly at 02:00 UTC.
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    name: Integration tests (Docker required)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup .NET (reads version from global.json)
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version-file: global.json
+
+      - name: Cache NuGet packages
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Restore
+        run: dotnet restore Vouchfx.Telemetry.Backend.sln
+
+      # Build all projects in the solution so the test step can use --no-build.
+      # Testcontainers does not require a running daemon at build time, only at
+      # test execution time.
+      - name: Build
+        run: dotnet build Vouchfx.Telemetry.Backend.sln -c Release --no-restore
+
+      # Guard: skip gracefully until the integration tests project exists and is
+      # added to the solution.  Once Vouchfx.Telemetry.Backend.IntegrationTests
+      # is checked in, remove the if-statement and rely on the build step.
+      - name: Run integration tests
+        run: |
+          PROJ="tests/Vouchfx.Telemetry.Backend.IntegrationTests"
+          if [ -d "$PROJ" ]; then
+            dotnet test "$PROJ" \
+              -c Release \
+              --no-build \
+              --logger "trx;LogFileName=integration-results.trx" \
+              --logger "console;verbosity=normal"
+          else
+            echo "::warning::Integration tests project not found at $PROJ — skipping. Add the project and re-run."
+          fi
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: integration-test-results
+          path: '**/*.trx'
+          retention-days: 7

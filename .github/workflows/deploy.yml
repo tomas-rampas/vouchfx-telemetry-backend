@@ -1,0 +1,156 @@
+# ────────────────────────────────────────────────────────────────────────────────
+# deploy.yml — Build and push the container image to ACR, then deploy Bicep IaC.
+#
+# Triggers:
+#   • workflow_dispatch — manual / environment-promotion gate.
+#   • release: published — automatic on GitHub release publication.
+#
+# Authentication: Azure OIDC federated identity (azure/login@v2).
+#   No long-lived credentials are stored as GitHub secrets.  The Entra App
+#   Registration / managed identity referenced by AZURE_CLIENT_ID must have a
+#   federated credential scoped to this repository (subject: repo:<org>/<repo>:ref:refs/heads/main
+#   or the ref that triggers this workflow).
+#   Docs: https://learn.microsoft.com/azure/developer/github/connect-from-azure
+#
+# ── Required GitHub VARIABLES (Settings → Secrets and variables → Variables) ──
+#   AZURE_CLIENT_ID        — Entra app client ID (used for OIDC, not a secret)
+#   AZURE_TENANT_ID        — Azure AD tenant ID
+#   AZURE_SUBSCRIPTION_ID  — Target subscription ID
+#   AZURE_RESOURCE_GROUP   — Target resource group name (must already exist)
+#   ACR_LOGIN_SERVER       — ACR login server FQDN, e.g. vfxtelregistry.azurecr.io
+#   DEPLOY_ENVIRONMENT     — 'dev' or 'prod' (selects deploy/parameters/<env>.bicepparam)
+#
+# ── Required GitHub SECRETS (Settings → Secrets and variables → Secrets) ──
+#   TELEMETRY_INGEST_TOKENS — Comma-separated bearer ingest tokens.
+#                             PLACEHOLDER: replace with real tokens before first deploy.
+#   DB_ADMIN_PASSWORD       — PostgreSQL admin password.
+#                             PLACEHOLDER: replace with a strong random password.
+#   DB_CONNECTION_STRING    — Full Npgsql connection string.
+#                             PLACEHOLDER: replace after Postgres server is provisioned.
+#
+#   The secrets above are exposed to the "Deploy Bicep IaC" step as the
+#   following environment variables (mapped in the step's env: block):
+#
+#     VFX_INGEST_TOKENS        ← secrets.TELEMETRY_INGEST_TOKENS
+#     VFX_DB_ADMIN_PASSWORD    ← secrets.DB_ADMIN_PASSWORD
+#     VFX_DB_CONNECTION_STRING ← secrets.DB_CONNECTION_STRING
+#     VFX_ACR_LOGIN_SERVER     ← vars.ACR_LOGIN_SERVER
+#     VFX_IMAGE_TAG            ← computed image tag (sha-<short> or semver)
+#
+#   The Bicep parameter files (dev.bicepparam / prod.bicepparam) read these via
+#   readEnvironmentVariable() so that 'bicep build-params' validates successfully
+#   in any environment where the VFX_* vars are present.  Values are NEVER
+#   written to parameter files, deployment logs, or source control.  They are
+#   stored encrypted in Azure Key Vault by the Bicep IaC and are only
+#   accessible to the Container App's user-assigned managed identity.
+# ────────────────────────────────────────────────────────────────────────────────
+name: Deploy
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  id-token: write   # Required for Azure OIDC token exchange.
+  contents: read
+
+jobs:
+  deploy:
+    name: Build image and deploy to Azure
+    runs-on: ubuntu-latest
+    # Targets the GitHub Environment matching DEPLOY_ENVIRONMENT (enables
+    # environment-level protection rules and secret scoping).
+    environment: ${{ vars.DEPLOY_ENVIRONMENT || 'dev' }}
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup .NET (reads version from global.json)
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version-file: global.json
+
+      # ── Azure OIDC login ───────────────────────────────────────────────────────
+      # No client secret or certificate is stored in GitHub.  Azure validates the
+      # OIDC JWT issued by GitHub Actions against the federated credential on the
+      # Entra App Registration.
+      - name: Azure OIDC login
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # ── Compute image tag ─────────────────────────────────────────────────────
+      # Published releases use the semver tag name (e.g. v1.2.3) so the deployed
+      # image is human-identifiable.  Manual dispatches use the short SHA so each
+      # deployment is uniquely traceable in ACR.
+      #
+      # SECURITY: github.event.release.tag_name is attacker-controlled (a crafted
+      # tag name can contain shell metacharacters).  It is placed in an env: var
+      # and validated against an allowlist before any use, never interpolated
+      # directly into a run: script body.
+      - name: Compute image tag
+        id: tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "release" ]]; then
+            # Allowlist: semver-style tags only (e.g. v1.2.3, v1.2.3-rc.1).
+            [[ "$RELEASE_TAG" =~ ^v[0-9A-Za-z.+-]+$ ]] \
+              || { echo "::error::Invalid release tag: $RELEASE_TAG" >&2; exit 1; }
+            echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=sha-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── Build and push to ACR ─────────────────────────────────────────────────
+      # `az acr build` performs a server-side build inside ACR (no local Docker
+      # daemon needed) and pushes directly to the registry.  Two tags are pushed:
+      #   • versioned (sha-... or semver) — pinned reference for this deployment
+      #   • latest — convenient pointer for dashboards / ad-hoc pulls
+      - name: Build and push image to ACR
+        env:
+          ACR_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+          IMAGE_TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          az acr build \
+            --registry "$ACR_SERVER" \
+            --image "vouchfx-telemetry-backend:$IMAGE_TAG" \
+            --image "vouchfx-telemetry-backend:latest" \
+            --file Dockerfile \
+            .
+
+      # ── Deploy Bicep IaC ──────────────────────────────────────────────────────
+      # The parameters file (dev.bicepparam / prod.bicepparam) supplies all
+      # parameters, including the five deploy-time secrets which are resolved
+      # via readEnvironmentVariable() from the VFX_* env vars exported below.
+      # This keeps secrets out of process arguments (not visible in ps output)
+      # and allows 'bicep build-params' to validate the params file in any
+      # environment where the VFX_* variables are set.
+      #
+      # SECURITY: vars.DEPLOY_ENVIRONMENT is used to construct a file path;
+      # AZURE_RESOURCE_GROUP is passed as an az CLI argument.  Both are routed
+      # through env: vars and DEPLOY_ENV is validated against an allowlist
+      # (^(dev|prod)$) before the path is assembled.
+      - name: Deploy Bicep IaC
+        env:
+          VFX_ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+          VFX_IMAGE_TAG: ${{ steps.tag.outputs.tag }}
+          VFX_INGEST_TOKENS: ${{ secrets.TELEMETRY_INGEST_TOKENS }}
+          VFX_DB_ADMIN_PASSWORD: ${{ secrets.DB_ADMIN_PASSWORD }}
+          VFX_DB_CONNECTION_STRING: ${{ secrets.DB_CONNECTION_STRING }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          DEPLOY_ENV: ${{ vars.DEPLOY_ENVIRONMENT || 'dev' }}
+        run: |
+          # Validate to prevent path traversal into deploy/parameters/.
+          [[ "$DEPLOY_ENV" =~ ^(dev|prod)$ ]] \
+            || { echo "::error::Invalid DEPLOY_ENVIRONMENT: $DEPLOY_ENV" >&2; exit 1; }
+          az deployment group create \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --template-file deploy/main.bicep \
+            --parameters "@deploy/parameters/${DEPLOY_ENV}.bicepparam"
