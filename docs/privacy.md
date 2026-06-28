@@ -89,11 +89,11 @@ An install ID is **not** a user ID or device ID. Deleting it severs the link bet
 
 ### User-Initiated Deletion
 
-1. **User runs:** `vouchfx telemetry disable --forget-my-data`
+1. **User runs:** `vouchfx telemetry disable`
 2. **Engine client:**
    - Stops recording telemetry
    - Computes the local install ID (stored in user's home directory)
-   - Sends `POST /v1/telemetry/forget` with the install ID
+   - Sends `POST /v1/telemetry/forget` with the install ID (best-effort)
 3. **Backend:**
    - Validates the request (401 if token invalid, 400 if malformed)
    - Enqueues the forget request (insert into `forget_queue`)
