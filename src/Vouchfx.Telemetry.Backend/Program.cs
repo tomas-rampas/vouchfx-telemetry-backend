@@ -52,14 +52,55 @@ builder.Services.Configure<TelemetryOptions>(opts =>
     {
         opts.RateWindowSeconds = rateWindowSecs;
     }
+
+    if (int.TryParse(cfg["VOUCHFX_TELEMETRY_RETENTION_DAYS"],
+            System.Globalization.CultureInfo.InvariantCulture, out var retDays))
+        opts.RetentionDays = retDays;
+
+    if (int.TryParse(cfg["VOUCHFX_TELEMETRY_PRECREATE_DAYS"],
+            System.Globalization.CultureInfo.InvariantCulture, out var preDays))
+        opts.PrecreateDays = preDays;
+
+    if (int.TryParse(cfg["VOUCHFX_TELEMETRY_DEDUP_RETENTION_DAYS"],
+            System.Globalization.CultureInfo.InvariantCulture, out var dedupDays))
+        opts.DedupRetentionDays = dedupDays;
+
+    if (int.TryParse(cfg["VOUCHFX_TELEMETRY_JOB_INTERVAL_HOURS"],
+            System.Globalization.CultureInfo.InvariantCulture, out var jobHours))
+        opts.JobIntervalHours = jobHours;
 });
+
+builder.Services.AddSingleton<IValidateOptions<TelemetryOptions>, TelemetryOptionsValidator>();
+builder.Services.AddOptions<TelemetryOptions>().ValidateOnStart();
+
+// Read early to decide which repository implementation to register.
+var connectionString = builder.Configuration["ConnectionStrings__Telemetry"]
+    ?? builder.Configuration["VOUCHFX_TELEMETRY_DB_CONNECTION"];
 
 // ── 2. Security ───────────────────────────────────────────────────────────────
 builder.Services.AddSingleton<BearerTokenValidator>();
 builder.Services.AddSingleton<BearerAuthEndpointFilter>();
 
-// ── 3. Persistence (placeholder; replace with Npgsql impl when DB is ready) ──
-builder.Services.AddSingleton<ITelemetryRepository, UnconfiguredTelemetryRepository>();
+// ── 3. Persistence ───────────────────────────────────────────────────────────────
+// TimeProvider must be registered unconditionally — the ingest endpoint uses it for
+// timestamp validation even when no database is configured.
+builder.Services.AddSingleton(TimeProvider.System);
+
+if (!string.IsNullOrWhiteSpace(connectionString))
+{
+    builder.Services.AddSingleton(
+        _ => Vouchfx.Telemetry.Backend.Persistence.NpgsqlDataSourceFactory.Build(connectionString));
+    builder.Services.AddSingleton<ITelemetryRepository,
+        Vouchfx.Telemetry.Backend.Persistence.NpgsqlTelemetryRepository>();
+    builder.Services.AddTransient<Vouchfx.Telemetry.Backend.Persistence.DbBootstrapper>();
+    builder.Services.AddSingleton<Vouchfx.Telemetry.Backend.Background.PartitionManager>();
+    builder.Services.AddSingleton<Vouchfx.Telemetry.Backend.Background.ForgetQueueDrainer>();
+    builder.Services.AddHostedService<Vouchfx.Telemetry.Backend.Background.RetentionHostedService>();
+}
+else
+{
+    builder.Services.AddSingleton<ITelemetryRepository, UnconfiguredTelemetryRepository>();
+}
 
 // ── 4. Rate limiting ─────────────────────────────────────────────────────────
 // Per-token limiter: a VALID bearer token gets its own fixed-window budget
@@ -150,6 +191,25 @@ builder.WebHost.ConfigureKestrel(k =>
 // ── Build ─────────────────────────────────────────────────────────────────────
 var app = builder.Build();
 
+// ── Production fail-fast: a Production backend with no DB must not start silently ──
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    if (app.Environment.IsProduction())
+    {
+        throw new InvalidOperationException(
+            "No database connection string is configured (ConnectionStrings__Telemetry or " +
+            "VOUCHFX_TELEMETRY_DB_CONNECTION). A Production deployment requires a real " +
+            "database; refusing to start to prevent silent data loss.");
+    }
+    // Development/Test: allow placeholder (unit tests run without DB).
+}
+else
+{
+    var bootstrapper = app.Services
+        .GetRequiredService<Vouchfx.Telemetry.Backend.Persistence.DbBootstrapper>();
+    await bootstrapper.BootstrapAsync(CancellationToken.None);
+}
+
 app.UseRateLimiter();
 
 app.MapGet("/", () => "vouchfx-telemetry-backend");
@@ -170,7 +230,7 @@ app.MapGet("/readyz", async (ITelemetryRepository repository, CancellationToken 
 
 app.MapTelemetryEndpoints();
 
-app.Run();
+await app.RunAsync();
 
 // Exposed so WebApplicationFactory<Program> can boot the app in tests.
 public partial class Program { }

@@ -38,4 +38,12 @@ public interface ITelemetryRepository
     /// <param name="ct">Cancellation token.</param>
     /// <returns><see langword="true"/> when the backend is ready; otherwise <see langword="false"/>.</returns>
     Task<bool> IsReadyAsync(CancellationToken ct);
+
+    /// <summary>Enqueues a GDPR forget request for the given install.</summary>
+    /// <param name="installId">The install identifier whose data should be erased.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <exception cref="TransientStorageException">
+    /// Thrown on transient database faults. The forget endpoint maps this to HTTP 503.
+    /// </exception>
+    Task EnqueueForgetAsync(Guid installId, CancellationToken ct);
 }

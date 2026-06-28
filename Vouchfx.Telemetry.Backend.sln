@@ -11,6 +11,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{03407666
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Vouchfx.Telemetry.Backend.UnitTests", "tests\Vouchfx.Telemetry.Backend.UnitTests\Vouchfx.Telemetry.Backend.UnitTests.csproj", "{A4E774B3-F641-4531-9297-48A8F7FC2DD7}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Vouchfx.Telemetry.Backend.IntegrationTests", "tests\Vouchfx.Telemetry.Backend.IntegrationTests\Vouchfx.Telemetry.Backend.IntegrationTests.csproj", "{F75A5820-0338-4CD8-94E5-A7A1313C3CDA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -28,9 +30,14 @@ Global
 		{A4E774B3-F641-4531-9297-48A8F7FC2DD7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A4E774B3-F641-4531-9297-48A8F7FC2DD7}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A4E774B3-F641-4531-9297-48A8F7FC2DD7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F75A5820-0338-4CD8-94E5-A7A1313C3CDA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F75A5820-0338-4CD8-94E5-A7A1313C3CDA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F75A5820-0338-4CD8-94E5-A7A1313C3CDA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F75A5820-0338-4CD8-94E5-A7A1313C3CDA}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{A9A461FF-5BED-4707-9893-E640E5FDC463} = {D1ADC85D-FB5C-46A9-97B4-353DBD17C6E6}
 		{A4E774B3-F641-4531-9297-48A8F7FC2DD7} = {03407666-6D5E-4EC8-A76A-F3295F5DAB62}
+		{F75A5820-0338-4CD8-94E5-A7A1313C3CDA} = {03407666-6D5E-4EC8-A76A-F3295F5DAB62}
 	EndGlobalSection
 EndGlobal

@@ -38,6 +38,15 @@ internal sealed class StubTelemetryRepository : ITelemetryRepository
     }
 
     public Task<bool> IsReadyAsync(CancellationToken ct) => Task.FromResult(IsReady);
+
+    public Guid? LastForgetInstallId { get; private set; }
+
+    public Task EnqueueForgetAsync(Guid installId, CancellationToken ct)
+    {
+        LastForgetInstallId = installId;
+        if (ThrowTransient) throw new TransientStorageException("test transient fault");
+        return Task.CompletedTask;
+    }
 }
 
 public sealed class IngestEndpointTests : IClassFixture<WebApplicationFactory<Program>>
@@ -359,6 +368,24 @@ public sealed class IngestEndpointTests : IClassFixture<WebApplicationFactory<Pr
         var body = await response.Content.ReadAsStringAsync();
         Assert.DoesNotContain("super-secret-token-12345", body, StringComparison.Ordinal);
         Assert.DoesNotContain("super-secret-token-12345", response.Headers.ToString(), StringComparison.Ordinal);
+    }
+
+    // ── Future-timestamp guard (FIX 1) ────────────────────────────────────────
+
+    [Fact]
+    public async Task FutureDatedEvent_Returns400()
+    {
+        // An event whose timestamp is more than 2 days in the future must be rejected.
+        var client = CreateClient();
+        // Replace the fixture's hardcoded date with now+3 days
+        var futureTs = DateTimeOffset.UtcNow.AddDays(3)
+            .ToString("yyyy-MM-ddTHH:mm:ss.fffzzz", System.Globalization.CultureInfo.InvariantCulture);
+        var futureLine = ValidEventLine.Replace(
+            "2026-06-28T12:34:56.789+00:00",
+            futureTs,
+            StringComparison.Ordinal);
+        var response = await client.SendAsync(BuildRequest(body: futureLine));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     // ── Health probes (FIX 3) ──────────────────────────────────────────────────

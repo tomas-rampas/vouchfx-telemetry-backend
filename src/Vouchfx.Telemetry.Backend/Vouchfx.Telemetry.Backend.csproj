@@ -4,4 +4,13 @@
     <RootNamespace>Vouchfx.Telemetry.Backend</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Npgsql" Version="8.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Link bootstrap.sql as embedded resource so DbBootstrapper can load it at runtime -->
+    <EmbeddedResource Include="..\..\deploy\sql\bootstrap.sql" LogicalName="bootstrap.sql" />
+  </ItemGroup>
+
 </Project>

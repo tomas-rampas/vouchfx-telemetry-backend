@@ -27,4 +27,9 @@ internal sealed class UnconfiguredTelemetryRepository : ITelemetryRepository
     /// from routing traffic until the Npgsql repository is registered.
     /// </remarks>
     public Task<bool> IsReadyAsync(CancellationToken ct) => Task.FromResult(false);
+
+    /// <inheritdoc/>
+    public Task EnqueueForgetAsync(Guid installId, CancellationToken ct)
+        => throw new TransientStorageException(
+            "No persistence backend is configured.");
 }

@@ -29,12 +29,28 @@ public static partial class TelemetryEndpoints
     [LoggerMessage(Level = LogLevel.Warning, Message = "Transient storage fault ingesting batch {IdempotencyKey}.")]
     private static partial void LogTransientFault(ILogger<IngestLogCategory> logger, Exception ex, string idempotencyKey);
 
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Transient storage fault enqueueing forget for {InstallIdPrefix}.")]
+    private static partial void LogForgetTransientFault(ILogger<IngestLogCategory> logger, Exception ex, string installIdPrefix);
+
+    // Cached options instance for the forget endpoint body deserialisation (avoids CA1869).
+    private static readonly System.Text.Json.JsonSerializerOptions ForgetJsonOptions =
+        new(System.Text.Json.JsonSerializerDefaults.Web);
+
+    /// <summary>Returns the first 8 chars of an install ID string followed by an ellipsis.</summary>
+    private static string TruncateInstallId(string installId) =>
+        installId.Length > 8 ? installId[..8] + "…" : installId;
+
     /// <summary>
-    /// Maps <c>POST /v1/telemetry</c> with Bearer auth and rate-limiting applied.
+    /// Maps <c>POST /v1/telemetry</c> and <c>POST /v1/telemetry/forget</c>
+    /// with Bearer auth and rate-limiting applied.
     /// </summary>
     public static IEndpointRouteBuilder MapTelemetryEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/v1/telemetry", HandleIngestAsync)
+            .AddEndpointFilter<BearerAuthEndpointFilter>()
+            .RequireRateLimiting("bearer-token");
+
+        app.MapPost("/v1/telemetry/forget", HandleForgetAsync)
             .AddEndpointFilter<BearerAuthEndpointFilter>()
             .RequireRateLimiting("bearer-token");
 
@@ -45,6 +61,7 @@ public static partial class TelemetryEndpoints
         HttpContext httpContext,
         IOptions<TelemetryOptions> options,
         ITelemetryRepository repository,
+        TimeProvider timeProvider,
         ILogger<IngestLogCategory> logger,
         CancellationToken ct)
     {
@@ -100,9 +117,56 @@ public static partial class TelemetryEndpoints
             ParseResult.Empty => Results.BadRequest("No events in body."),
             ParseResult.TooManyLines => Results.StatusCode(StatusCodes.Status413RequestEntityTooLarge),
             ParseResult.Bad bad => await LogAndBadRequestAsync(bad, logger),
-            ParseResult.Ok ok => await IngestOkAsync(ok.Events, idempotencyKey, repository, logger, ct),
+            ParseResult.Ok ok => ok.Events.Any(e => e.Timestamp > timeProvider.GetUtcNow().AddDays(2))
+                ? Results.BadRequest("Event timestamp is too far in the future.")
+                : await IngestOkAsync(ok.Events, idempotencyKey, repository, logger, ct),
             _ => throw new InvalidOperationException($"Unexpected ParseResult type: {parseResult.GetType().Name}")
         };
+    }
+
+    private static async Task<IResult> HandleForgetAsync(
+        HttpContext httpContext,
+        ITelemetryRepository repository,
+        ILogger<IngestLogCategory> logger,
+        CancellationToken ct)
+    {
+        // 1. Content-Type must be application/json
+        var mediaType = (httpContext.Request.ContentType ?? string.Empty).Split(';')[0].Trim();
+        if (!string.Equals(mediaType, "application/json", StringComparison.OrdinalIgnoreCase))
+            return Results.StatusCode(StatusCodes.Status415UnsupportedMediaType);
+
+        // 2. Parse body
+        Contracts.ForgetRequest? request;
+        try
+        {
+            request = await System.Text.Json.JsonSerializer.DeserializeAsync<Contracts.ForgetRequest>(
+                httpContext.Request.Body,
+                ForgetJsonOptions,
+                ct);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return Results.BadRequest("Invalid request body.");
+        }
+
+        if (request is null)
+            return Results.BadRequest("Invalid request body.");
+
+        // 3. Validate installId
+        if (!Guid.TryParse(request.InstallId, out var installId))
+            return Results.BadRequest("Invalid installId.");
+
+        // 4. Enqueue forget
+        try
+        {
+            await repository.EnqueueForgetAsync(installId, ct);
+            return Results.Ok();
+        }
+        catch (TransientStorageException ex)
+        {
+            LogForgetTransientFault(logger, ex, TruncateInstallId(request.InstallId));
+            return new ServiceUnavailableResult();
+        }
     }
 
     private static Task<IResult> LogAndBadRequestAsync(ParseResult.Bad bad, ILogger<IngestLogCategory> logger)
@@ -138,6 +202,7 @@ public static partial class TelemetryEndpoints
 /// </summary>
 internal sealed class ServiceUnavailableResult : IResult
 {
+    /// <inheritdoc/>
     public Task ExecuteAsync(HttpContext httpContext)
     {
         httpContext.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
