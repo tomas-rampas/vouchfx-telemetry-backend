@@ -200,6 +200,13 @@ public static partial class TelemetryEndpoints
 /// <summary>
 /// Returns HTTP 503 with a <c>Retry-After: 30</c> header and no body.
 /// </summary>
+/// <remarks>
+/// The 30-second retry hint is intentionally shorter than the 60-second
+/// <c>Retry-After</c> value used by the rate-limiter (429). A transient storage
+/// fault typically resolves within seconds; a shorter window avoids unnecessary
+/// client wait time. Rate-limit windows, by contrast, must be honoured for the
+/// full window duration so the token bucket replenishes.
+/// </remarks>
 internal sealed class ServiceUnavailableResult : IResult
 {
     /// <inheritdoc/>

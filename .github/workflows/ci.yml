@@ -79,3 +79,31 @@ jobs:
           name: unit-test-results
           path: '**/*.trx'
           retention-days: 7
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # container-build — verify the Docker image can be produced end-to-end.
+  #
+  # This job gates the class of defect that unit / integration tests cannot
+  # catch: a missing build-context file, a broken COPY instruction, or a CSC
+  # EmbeddedResource path that doesn't resolve inside the image.  No image is
+  # pushed; the build is a correctness check only.
+  #
+  # `dotnet publish` runs inside the SDK layer (Stage 1), so the job takes
+  # roughly the same time as the CI restore + build step above — the NuGet
+  # packages are fetched by the Docker layer cache on the runner, not from
+  # the host cache, keeping the jobs fully independent.
+  # ────────────────────────────────────────────────────────────────────────────
+  container-build:
+    name: Container image build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      # Build the image using the repo root as build context (same as
+      # `az acr build --file Dockerfile .` in deploy.yml).  No registry push.
+      # A non-zero exit from `docker build` fails the job and blocks the PR.
+      - name: Build Docker image
+        run: docker build -f Dockerfile -t vfxtel:ci-check .

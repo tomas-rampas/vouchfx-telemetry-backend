@@ -27,6 +27,12 @@ COPY src/Vouchfx.Telemetry.Backend/Vouchfx.Telemetry.Backend.csproj \
 
 RUN dotnet restore src/Vouchfx.Telemetry.Backend/Vouchfx.Telemetry.Backend.csproj
 
+# Copy the embedded-resource SQL file at the exact relative path the project
+# expects: the .csproj uses Include="..\..\deploy\sql\bootstrap.sql", which
+# from /src/src/Vouchfx.Telemetry.Backend/ resolves to /src/deploy/sql/bootstrap.sql.
+# deploy/sql/ is un-ignored by .dockerignore so it reaches this COPY instruction.
+COPY deploy/sql/ deploy/sql/
+
 # Copy service source and publish a framework-dependent Release output.
 COPY src/Vouchfx.Telemetry.Backend/ src/Vouchfx.Telemetry.Backend/
 

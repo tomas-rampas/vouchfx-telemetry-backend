@@ -442,4 +442,99 @@ public sealed class IngestEndpointTests : IClassFixture<WebApplicationFactory<Pr
         var response = await client.GetAsync("/healthz");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
+
+    // ── Forget endpoint ────────────────────────────────────────────────────────
+
+    private const string ValidInstallIdBody = """{"installId":"11111111-2222-3333-4444-555555555555"}""";
+
+    private static HttpRequestMessage BuildForgetRequest(
+        string? token = ValidToken,
+        string? contentType = "application/json",
+        string? body = null)
+    {
+        body ??= ValidInstallIdBody;
+        var request = new HttpRequestMessage(HttpMethod.Post, "/v1/telemetry/forget");
+        if (token != null)
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+
+        request.Content = new StringContent(body, Encoding.UTF8, contentType ?? "application/json");
+        if (contentType == null)
+        {
+            request.Content.Headers.ContentType = null;
+        }
+
+        return request;
+    }
+
+    [Fact]
+    public async Task Forget_WrongContentType_Returns415()
+    {
+        var client = CreateClient();
+        var response = await client.SendAsync(BuildForgetRequest(contentType: "text/plain"));
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Forget_NoAuthHeader_Returns401()
+    {
+        var client = CreateClient();
+        var response = await client.SendAsync(BuildForgetRequest(token: null));
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Forget_WrongToken_Returns401()
+    {
+        var client = CreateClient();
+        var response = await client.SendAsync(BuildForgetRequest(token: "wrong-token"));
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Forget_EmptyJsonObject_MissingInstallId_Returns400()
+    {
+        // "{}" has the right content-type but no installId property: STJ throws
+        // JsonException on the missing required positional-record parameter → 400.
+        var client = CreateClient();
+        var response = await client.SendAsync(BuildForgetRequest(body: "{}"));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Forget_BlankInstallId_Returns400()
+    {
+        var client = CreateClient();
+        var response = await client.SendAsync(BuildForgetRequest(body: """{"installId":""}"""));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Forget_MalformedGuidInstallId_Returns400()
+    {
+        var client = CreateClient();
+        var response = await client.SendAsync(BuildForgetRequest(body: """{"installId":"not-a-guid"}"""));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Forget_ValidGuid_Returns200_AndCallsEnqueueForgetWithCorrectId()
+    {
+        var expectedId = Guid.Parse("11111111-2222-3333-4444-555555555555");
+        var client = CreateClient();
+        var response = await client.SendAsync(BuildForgetRequest(body: ValidInstallIdBody));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(expectedId, _stub.LastForgetInstallId);
+    }
+
+    [Fact]
+    public async Task Forget_TransientStorageException_Returns503WithRetryAfter()
+    {
+        _stub.ThrowTransient = true;
+        var client = CreateClient();
+        var response = await client.SendAsync(BuildForgetRequest());
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.True(response.Headers.Contains("Retry-After"));
+    }
 }

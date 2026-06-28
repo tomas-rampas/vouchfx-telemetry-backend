@@ -74,7 +74,11 @@ builder.Services.AddSingleton<IValidateOptions<TelemetryOptions>, TelemetryOptio
 builder.Services.AddOptions<TelemetryOptions>().ValidateOnStart();
 
 // Read early to decide which repository implementation to register.
-var connectionString = builder.Configuration["ConnectionStrings__Telemetry"]
+// GetConnectionString("Telemetry") reads config key "ConnectionStrings:Telemetry".
+// The IaC injects this via env var "ConnectionStrings__Telemetry": the .NET env-var
+// provider normalises "__" → ":", so GetConnectionString is the only correct read —
+// the literal key "ConnectionStrings__Telemetry" would always return null.
+var connectionString = builder.Configuration.GetConnectionString("Telemetry")
     ?? builder.Configuration["VOUCHFX_TELEMETRY_DB_CONNECTION"];
 
 // ── 2. Security ───────────────────────────────────────────────────────────────
@@ -167,6 +171,11 @@ builder.Services.AddRateLimiter(options =>
     options.OnRejected = async (context, ct) =>
     {
         context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        // Retry-After: prefer the rate-limiter's own remaining-window metadata; fall back
+        // to 60 s (the default RateWindowSeconds). This is intentionally longer than the
+        // 30 s used by ServiceUnavailableResult for transient storage faults: rate-limit
+        // windows must be waited in full so the token bucket replenishes, whereas storage
+        // faults typically resolve in seconds and warrant a shorter retry hint.
         context.HttpContext.Response.Headers.RetryAfter =
             context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter)
                 ? ((int)retryAfter.TotalSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture)
