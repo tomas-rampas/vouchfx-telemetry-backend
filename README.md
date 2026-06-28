@@ -4,9 +4,10 @@ The deployed, opt-in **telemetry pilot backend** for [vouchfx](https://github.co
 — Phase B of task **S12-G-01** (issue
 [vouchfx#152](https://github.com/tomas-rampas/vouchfx/issues/152)).
 
-> **Status:** under construction. The engine-side transport (Phase A) is already merged into the
-> engine repo (vouchfx PR #155) and is **inert** until an endpoint + token are configured; this
-> repository is the server half it drains to.
+> **Status:** complete and ready for deployment. The engine-side transport (Phase A) is merged
+> into the engine repo (vouchfx PR #155) and is **inert** until an endpoint + token are
+> configured; this repository contains the server half (complete, tested, documented).
+> Operator deployment (Bicep, secrets, database bootstrap) is required before the system is live.
 
 ## What it is
 
@@ -23,16 +24,21 @@ It is **privacy-allowlist-only by construction**: it stores only the frozen `Tel
 fields (aggregate counts, timings, anonymous install id, versions). Nothing a customer's tests
 touch can reach it — there is nowhere to put it.
 
-## The frozen wire contract
+## Documentation
 
-This backend implements the contract the (frozen, merged) Phase-A engine client speaks. See
-[`docs/wire-contract.md`](docs/wire-contract.md) for the authoritative description, cross-referenced
-to vouchfx PR #155.
+- **[Wire Contract](docs/wire-contract.md)** — The HTTP API specification (endpoints, status codes, payload schema, deduplication)
+- **[Architecture](docs/architecture.md)** — System design, five-component architecture, PostgreSQL schema, Azure topology
+- **[Operations Runbook](docs/operations.md)** — Deployment procedures, configuration reference, troubleshooting, maintenance tasks
+- **[Privacy Policy](docs/privacy.md)** — Data handling, retention, deletion, and compliance considerations
 
-| | |
-|---|---|
-| Ingest | `POST /v1/telemetry` · `application/x-ndjson` · `Authorization: Bearer` · `Idempotency-Key` · NDJSON `TelemetryEvent` lines · any 2xx = accepted |
-| Forget | `POST /v1/telemetry/forget` · `application/json` · `{"installId":"<guid>"}` · `Authorization: Bearer` |
+## Endpoints at a Glance
+
+| Endpoint | Method | Auth | Body | Returns |
+|----------|--------|------|------|---------|
+| `/v1/telemetry` | POST | Bearer token | `application/x-ndjson` NDJSON `TelemetryEvent` lines | 200 (accepted) / 4xx / 5xx |
+| `/v1/telemetry/forget` | POST | Bearer token | `application/json` `{"installId":"<guid>"}` | 200 (queued) / 4xx / 5xx |
+| `/healthz` | GET | None | — | 200 (alive) |
+| `/readyz` | GET | None | — | 200 (ready) / 503 (not ready) |
 
 ## Repository layout
 
