@@ -1,0 +1,18 @@
+# Normalise text files to LF in the repository; check out native on each platform.
+* text=auto
+
+# Keep these explicitly LF even in the working tree (shell scripts / yaml / sql).
+*.sh   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.sql  text eol=lf
+*.bicep text eol=lf
+
+# ---------------------------------------------------------------------------
+# GOLDEN TELEMETRY FIXTURES — byte-exact engine output. NEVER convert line
+# endings: the Idempotency-Key is a SHA-256 over the exact batch bytes
+# (lines joined by '\n'), so a CRLF conversion would change the hash and break
+# the ContractParityTests on checkout/CI. Treat as binary (no eol conversion).
+# This rule is LAST so it wins over `* text=auto`.
+# ---------------------------------------------------------------------------
+tests/Vouchfx.Telemetry.Backend.UnitTests/Fixtures/** -text

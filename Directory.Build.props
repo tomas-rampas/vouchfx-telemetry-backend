@@ -1,0 +1,16 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <Deterministic>true</Deterministic>
+    <!-- This repo ships a deployed service + IaC, not NuGet packages. Nothing is
+         packable; the contract DTOs are copied verbatim from the engine (no NuGet
+         coupling) and proven byte-compatible by a golden-fixture parity test. -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+</Project>

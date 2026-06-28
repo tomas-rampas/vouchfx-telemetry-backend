@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{D1ADC85D-FB5C-46A9-97B4-353DBD17C6E6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Vouchfx.Telemetry.Backend", "src\Vouchfx.Telemetry.Backend\Vouchfx.Telemetry.Backend.csproj", "{A9A461FF-5BED-4707-9893-E640E5FDC463}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{03407666-6D5E-4EC8-A76A-F3295F5DAB62}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Vouchfx.Telemetry.Backend.UnitTests", "tests\Vouchfx.Telemetry.Backend.UnitTests\Vouchfx.Telemetry.Backend.UnitTests.csproj", "{A4E774B3-F641-4531-9297-48A8F7FC2DD7}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A9A461FF-5BED-4707-9893-E640E5FDC463}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A9A461FF-5BED-4707-9893-E640E5FDC463}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A9A461FF-5BED-4707-9893-E640E5FDC463}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A9A461FF-5BED-4707-9893-E640E5FDC463}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A4E774B3-F641-4531-9297-48A8F7FC2DD7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A4E774B3-F641-4531-9297-48A8F7FC2DD7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A4E774B3-F641-4531-9297-48A8F7FC2DD7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A4E774B3-F641-4531-9297-48A8F7FC2DD7}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{A9A461FF-5BED-4707-9893-E640E5FDC463} = {D1ADC85D-FB5C-46A9-97B4-353DBD17C6E6}
+		{A4E774B3-F641-4531-9297-48A8F7FC2DD7} = {03407666-6D5E-4EC8-A76A-F3295F5DAB62}
+	EndGlobalSection
+EndGlobal

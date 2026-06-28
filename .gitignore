@@ -1,0 +1,84 @@
+# ---------------------------------------------------------------------------
+# .gitignore for vouchfx-telemetry-backend (.NET 8 service + Bicep IaC)
+# Covers: .NET build output, IDEs, NuGet, test results, secrets, Docker/Testcontainers, OS cruft.
+# ---------------------------------------------------------------------------
+
+## .NET build output
+bin/
+obj/
+out/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+publish/
+*.dll
+*.exe
+*.pdb
+project.lock.json
+
+## .NET tool / restore caches
+.dotnet/
+.packages/
+
+## NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+
+## Test results & coverage
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coverletoutput
+coverage*.json
+coverage*.xml
+coverage*.info
+TestResults/
+
+## Visual Studio / Rider / VS Code
+.vs/
+.idea/
+*.user
+*.suo
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+## Roslyn / MSBuild
+*.binlog
+msbuild.log
+
+## Local secrets & environment — NEVER commit a real ingest token or DB password
+*.secrets
+secrets.json
+secrets.local.*
+.env
+.env.*
+!.env.example
+appsettings.*.local.json
+
+## Bicep
+*.bicepparam.local
+
+## Testcontainers / Docker scratch
+.testcontainers.properties
+
+## OS-generated files
+.DS_Store
+._*
+Thumbs.db
+desktop.ini
+
+## Logs & temp
+*.log
+*.tmp
+*.swp
+*~
+
+## Agent / tooling scratch
+.claude/
+.serena/
