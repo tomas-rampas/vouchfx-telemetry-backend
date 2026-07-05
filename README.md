@@ -58,6 +58,15 @@ dotnet test tests/Vouchfx.Telemetry.Backend.UnitTests        # no Docker require
 dotnet test tests/Vouchfx.Telemetry.Backend.IntegrationTests # requires Docker (Testcontainers)
 ```
 
+## Contributing & security
+
+Contributions are welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md) for the build,
+test, and quality gates, and the [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) that
+applies to all interactions here. To report a suspected vulnerability, please use
+GitHub private vulnerability reporting as described in [`SECURITY.md`](SECURITY.md)
+— never a public issue. Product-level telemetry discussion belongs in the
+[engine repository's issues](https://github.com/tomas-rampas/vouchfx/issues).
+
 ## Licence
 
 Apache-2.0 (matching the vouchfx engine and provider tiers).
