@@ -41,37 +41,46 @@ Record the `appId` from the output — this becomes `AZURE_CLIENT_ID` (GitHub VA
 az ad sp create --id <appId>
 ```
 
-**Create a federated credential** (scoped to this repository and the `main` branch):
+**Create federated credentials** (scoped to this repository and GitHub Environments):
 
-The GitHub Actions OIDC subject format for GitHub-hosted runners is:
-
-```
-repo:<owner>/<repo>:ref:refs/heads/<branch>
-```
-
-For this repository:
+The deploy workflow binds each deployment to a GitHub Environment (`.github/workflows/deploy.yml` line 64:
+`environment: ${{ vars.DEPLOY_ENVIRONMENT || 'dev' }}`). The OIDC subject format is therefore
+**environment-based**, not ref-based:
 
 ```
-repo:tomas-rampas/vouchfx-telemetry-backend:ref:refs/heads/main
+repo:<owner>/<repo>:environment:<env>
 ```
 
-Create the federated credential:
+Create a federated credential **for the `dev` environment**:
 
 ```bash
 az ad app federated-credential create \
   --id <appId> \
   --parameters '{
-      "name": "github-vouchfx-telemetry-backend-main",
+      "name": "github-vouchfx-telemetry-backend-dev",
       "issuer": "https://token.actions.githubusercontent.com",
-      "subject": "repo:tomas-rampas/vouchfx-telemetry-backend:ref:refs/heads/main",
+      "subject": "repo:tomas-rampas/vouchfx-telemetry-backend:environment:dev",
       "audiences": ["api://AzureADTokenExchange"]
     }'
 ```
 
-**Note:** If you use a different branch or environment (dev vs. prod), create separate federated
-credentials with the corresponding branch name. The `deploy.yml` workflow uses
-`vars.DEPLOY_ENVIRONMENT` to select which federated credential is needed (the subject
-must match the branch triggering the workflow).
+And **for the `prod` environment** (if deploying to production):
+
+```bash
+az ad app federated-credential create \
+  --id <appId> \
+  --parameters '{
+      "name": "github-vouchfx-telemetry-backend-prod",
+      "issuer": "https://token.actions.githubusercontent.com",
+      "subject": "repo:tomas-rampas/vouchfx-telemetry-backend:environment:prod",
+      "audiences": ["api://AzureADTokenExchange"]
+    }'
+```
+
+**Critical:** The federated credential's subject **must match** the value of `vars.DEPLOY_ENVIRONMENT`
+in GitHub. Both `workflow_dispatch` (manual) and `release` (automatic) triggers use the same
+environment binding, so the subject applies to both. If the subject does not match, the Azure login
+step will fail with `AADSTS700213` (federated credential not found).
 
 ### 1.3 Role Assignments
 
@@ -157,7 +166,7 @@ Create the following **repository secrets**:
 
 #### `TELEMETRY_INGEST_TOKENS`
 
-**Format:** Comma-separated bearer tokens (no spaces).
+**Format:** Comma-separated bearer tokens. Whitespace around commas is automatically trimmed.
 
 The backend validates incoming `POST /v1/telemetry` requests against these tokens
 via HTTP `Authorization: Bearer <token>` headers. Generate strong random values
@@ -170,8 +179,9 @@ token-prod-001-abcdef123456,token-prod-002-xyz789klmn
 ```
 
 The engine passes one of these tokens in the `VOUCHFX_TELEMETRY_TOKEN` environment variable.
-Rotate these tokens periodically; the backend stores them in Key Vault and can be updated
-without redeploying the service (the Container App re-reads the KV secret).
+To rotate tokens: update this secret in GitHub, re-run the deployment workflow, and wait for the
+Container App to restart. The tokens are read once at startup into a singleton
+(`BearerTokenValidator`, `containerApp.bicep` lines 99–100), so changes require a container restart.
 
 **Verification:** In `.github/workflows/deploy.yml`:
 - Line 144: `VFX_INGEST_TOKENS: ${{ secrets.TELEMETRY_INGEST_TOKENS }}`
@@ -304,23 +314,29 @@ curl https://<app-fqdn>/healthz
 curl https://<app-fqdn>/readyz
 ```
 
-Both should return HTTP 200 with a response body like `{"status":"Healthy"}`.
+Both should return HTTP 200 with an **empty response body**.
 
 ### 4.2 Ingest a Test Batch
 
-**Test the ingest endpoint** with a minimal NDJSON telemetry batch:
+**Test the ingest endpoint** with a minimal NDJSON telemetry batch conforming to the v1 schema
+(see `docs/wire-contract.md` for the full schema):
 
 ```bash
-# Create a test batch (one TelemetryEvent line)
+# Create a test batch (one TelemetryEvent line — note: timestamp not eventTimestamp, nested verdicts)
 cat > /tmp/test-batch.ndjson <<'EOF'
-{"schemaVersion":1,"installId":"00000000-0000-0000-0000-000000000000","eventTimestamp":"2026-07-10T12:00:00Z","toolVersion":"1.0.0","engineVersion":"1.0.0","dotnetVersion":"8.0.0","runCount":1,"scenarioCount":1,"stepPass":1,"stepFail":0,"stepEnvError":0,"stepInconclusive":0,"scenarioPass":1,"scenarioFail":0,"scenarioEnvError":0,"scenarioInconclusive":0,"stepFamilies":{},"stepProviders":{},"startupMs":100,"timeToFirstTestMs":500}
+{"schemaVersion":1,"timestamp":"2026-07-10T12:00:00Z","installId":"00000000-0000-0000-0000-000000000000","toolVersion":"1.0.0","engineVersion":"1.0.0","dotnetVersion":".NET 8.0.7","runCount":1,"scenarioCount":1,"stepVerdicts":{"pass":1,"fail":0,"envError":0,"inconclusive":0},"scenarioVerdicts":{"pass":1,"fail":0,"envError":0,"inconclusive":0},"stepFamilies":{},"stepProviders":{},"startupMs":100,"timeToFirstTestMs":500}
 EOF
 
-# Ingest the batch
+# Compute the Idempotency-Key (SHA-256 of the exact request body)
+BODY=$(cat /tmp/test-batch.ndjson)
+IDEMPOTENCY_KEY=$(printf '%s' "$BODY" | sha256sum | cut -d' ' -f1)
+
+# Ingest the batch with the required Idempotency-Key header
 curl -X POST \
   https://<app-fqdn>/v1/telemetry \
   -H "Authorization: Bearer <one-of-your-TELEMETRY_INGEST_TOKENS>" \
   -H "Content-Type: application/x-ndjson" \
+  -H "Idempotency-Key: $IDEMPOTENCY_KEY" \
   --data-binary @/tmp/test-batch.ndjson
 ```
 
@@ -328,10 +344,17 @@ Expected response:
 
 ```
 HTTP 200
-{}
 ```
 
+(Empty response body. If you see a 400 with "unknown fields", verify the schema matches
+`docs/wire-contract.md` exactly — v1 is strict and rejects unknown properties.)
+
 ### 4.3 Database Connectivity & Schema
+
+The database schema is **automatically bootstrapped at service startup** (Program.cs:215-220).
+The Container App runs `DbBootstrapper.BootstrapAsync()` during initialization, which
+idempotently creates the schema (tables, partitions, functions) using the embedded `bootstrap.sql`
+and an advisory lock to prevent concurrent executions.
 
 Verify the PostgreSQL database and schema are set up:
 
@@ -343,17 +366,18 @@ psql --host=<postgres-server-fqdn> \
      --dbname=telemetry
 
 # In the psql prompt, check the schema
-\dt                          # List tables
-SELECT * FROM telemetry_event LIMIT 1;  # Should return your test event
+\dt                          # List tables — should show telemetry_event, ingest_batch, forget_queue, v_*
+SELECT * FROM telemetry_event LIMIT 1;  # Check for your test event
 ```
 
-If the schema is not present, the bootstrap SQL must be run manually. The Bicep deployment
-does **not** automatically execute `deploy/sql/bootstrap.sql`; that is a manual step:
+**Fallback (if the app lacks DDL rights):** If the database role `vfxteladmin` lacks `CREATE TABLE`
+or other DDL permissions (e.g. read-only roles), the bootstrap will fail and the app will not start.
+In that case, manually run the bootstrap SQL as an administrator:
 
 ```bash
 psql --host=<postgres-server-fqdn> \
      --port=5432 \
-     --username=vfxteladmin \
+     --username=<postgres-admin> \
      --dbname=telemetry \
      -f deploy/sql/bootstrap.sql
 ```
@@ -438,15 +462,20 @@ out of scope for this handback; coordinate with the engine maintainer.
 ### 5.3 Batch Contents
 
 The engine sends telemetry batches as NDJSON (one `TelemetryEvent` per line) to
-`POST /v1/telemetry` with Bearer authentication. The exact schema is defined in
+`POST /v1/telemetry` with Bearer authentication and a required `Idempotency-Key` header
+(64-character lowercase hex SHA-256 of the request body).  The exact schema is defined in
 [`docs/wire-contract.md`](../docs/wire-contract.md).
 
-Example batch (two events):
+Example batch (two events, v1 schema with nested verdicts):
 
 ```
-{"schemaVersion":1,"installId":"<uuid>","eventTimestamp":"2026-07-10T12:00:00Z",...}
-{"schemaVersion":1,"installId":"<uuid>","eventTimestamp":"2026-07-10T12:30:00Z",...}
+{"schemaVersion":1,"timestamp":"2026-07-10T12:00:00Z","installId":"<uuid>","toolVersion":"1.0.0","engineVersion":"1.0.0","dotnetVersion":".NET 8.0.7","runCount":1,"scenarioCount":1,"stepVerdicts":{"pass":5,"fail":0,"envError":0,"inconclusive":0},"scenarioVerdicts":{"pass":1,"fail":0,"envError":0,"inconclusive":0},"stepFamilies":{"http":3,"db-assert":2},"stepProviders":{"http.rest":3,"db-assert.postgres":2},"startupMs":150,"timeToFirstTestMs":1200}
+{"schemaVersion":1,"timestamp":"2026-07-10T12:30:00Z","installId":"<uuid>","toolVersion":"1.0.0","engineVersion":"1.0.0","dotnetVersion":".NET 8.0.7","runCount":1,"scenarioCount":2,"stepVerdicts":{"pass":8,"fail":1,"envError":0,"inconclusive":0},"scenarioVerdicts":{"pass":1,"fail":1,"envError":0,"inconclusive":0},"stepFamilies":{"http":4,"mq-publish.kafka":2,"db-assert":2},"stepProviders":{"http.rest":4,"mq-publish.kafka":2,"db-assert.postgres":2},"startupMs":140,"timeToFirstTestMs":950}
 ```
+
+Key differences from earlier versions:
+- Field is `timestamp` (ISO 8601), not `eventTimestamp`
+- Verdict counts are nested in `stepVerdicts` and `scenarioVerdicts` objects (with `pass`, `fail`, `envError`, `inconclusive` properties), not flat fields
 
 ---
 
@@ -518,11 +547,13 @@ service, which is pure ASP.NET Core minimal API.
 
 ### Service returns 503 on `/readyz`
 
-**Cause:** The readiness probe checks database connectivity and schema presence. Possible reasons:
+**Cause:** The readiness probe checks database connectivity via a `SELECT 1` query (Program.cs:141-142). 
+If the probe returns 503, the database is unreachable. Possible reasons:
 
 - PostgreSQL is not fully provisioned yet (wait 5–10 minutes after first deployment)
-- The `bootstrap.sql` schema has not been applied (see §4.3)
-- The connection string secret in Key Vault is invalid (check §2.2)
+- The connection string secret in Key Vault is invalid or missing (check §2.2)
+- The Container App cannot reach the database (firewall rule missing or network misconfiguration)
+- The PostgreSQL admin password is incorrect (double-check against `DB_ADMIN_PASSWORD` secret)
 
 **Resolution:**
 
