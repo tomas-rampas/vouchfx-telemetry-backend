@@ -1,7 +1,7 @@
 // Vouchfx.Telemetry.Backend — TelemetryVerdictCounts contract DTO.
 //
-// Copied verbatim from Platform.Engine.Telemetry/TelemetryEvent.cs (engine PR #155, issue #152).
-// Namespace changed from Platform.Engine.Telemetry → Vouchfx.Telemetry.Backend.Contracts.
+// Copied verbatim from Vouchfx.Engine.Telemetry/TelemetryEvent.cs (engine PR #155, issue #152).
+// Namespace changed from Vouchfx.Engine.Telemetry → Vouchfx.Telemetry.Backend.Contracts.
 // Byte-compatible with the engine's wire format; proven by ContractParityTests.
 // DO NOT modify property names, types, [JsonPropertyName] values, or property order.
 

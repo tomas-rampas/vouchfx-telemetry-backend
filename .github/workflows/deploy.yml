@@ -8,8 +8,8 @@
 # Authentication: Azure OIDC federated identity (azure/login@v2).
 #   No long-lived credentials are stored as GitHub secrets.  The Entra App
 #   Registration / managed identity referenced by AZURE_CLIENT_ID must have a
-#   federated credential scoped to this repository (subject: repo:<org>/<repo>:ref:refs/heads/main
-#   or the ref that triggers this workflow).
+#   federated credential scoped to this repository and GitHub Environment (subject: repo:<org>/<repo>:environment:<env>
+#   where <env> is the value of vars.DEPLOY_ENVIRONMENT, e.g. :environment:dev or :environment:prod).
 #   Docs: https://learn.microsoft.com/azure/developer/github/connect-from-azure
 #
 # ── Required GitHub VARIABLES (Settings → Secrets and variables → Variables) ──
