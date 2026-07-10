@@ -7,6 +7,7 @@ The deployed, opt-in **telemetry pilot backend** for [vouchfx](https://github.co
 > **Status:** complete and ready for deployment. The engine-side transport (Phase A) is merged
 > into the engine repo (vouchfx PR #155) and is **inert** until an endpoint + token are
 > configured; this repository contains the server half (complete, tested, documented).
+> Build, unit, and scheduled Testcontainers integration tests are **green** in CI.
 > Operator deployment (Bicep, secrets, database bootstrap) is required before the system is live.
 
 ## What it is
@@ -69,4 +70,4 @@ GitHub private vulnerability reporting as described in [`SECURITY.md`](SECURITY.
 
 ## Licence
 
-Apache-2.0 (matching the vouchfx engine and provider tiers).
+Apache-2.0 (matching the vouchfx engine).
