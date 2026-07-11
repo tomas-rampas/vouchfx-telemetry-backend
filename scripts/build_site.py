@@ -432,6 +432,8 @@ def fetch_facts() -> dict[str, str]:
 
     try:
         releases = _fetch_json("https://api.github.com/repos/tomas-rampas/vouchfx/releases")
+        # Deliberately keeps pre-releases (the alpha series IS the release line
+        # today); only drafts are skipped. Do not add a prerelease filter.
         release = next(r for r in releases if not r.get("draft"))  # type: ignore[union-attr]
         live["engine_release"] = release["tag_name"]
     except (urllib.error.URLError, TimeoutError, ValueError, KeyError, StopIteration, TypeError, AttributeError) as exc:
@@ -453,7 +455,9 @@ def fetch_facts() -> dict[str, str]:
         registry = _fetch_json(
             "https://raw.githubusercontent.com/tomas-rampas/vouchfx-providers/main/registry/community-providers.json"
         )
-        live["community_provider_count"] = str(len(registry))  # type: ignore[arg-type]
+        if not isinstance(registry, list):
+            raise ValueError("registry JSON is no longer a top-level array")
+        live["community_provider_count"] = str(len(registry))
     except (urllib.error.URLError, TimeoutError, ValueError, TypeError) as exc:
         print(f"  fact community_provider_count: live fetch failed ({exc}); using fallback")
 
