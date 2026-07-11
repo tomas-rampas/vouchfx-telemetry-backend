@@ -1,7 +1,5 @@
 # Operations Runbook
 
-S12-G-01 / Issue #152 Phase B
-
 This document is the operator's guide to deploying, configuring, monitoring, and troubleshooting the vouchfx telemetry backend.
 
 ## Deployment Overview

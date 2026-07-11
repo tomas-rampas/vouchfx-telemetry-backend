@@ -1,6 +1,5 @@
 # vouchfx Telemetry Backend — SQL DML Reference
 
-S12-G-01 / Issue #152 Phase B  
 Target: PostgreSQL 16 on Azure Database for PostgreSQL Flexible Server
 
 This document specifies every parameterised SQL statement the C# ingest service
@@ -222,9 +221,8 @@ multiple container replicas do not interfere with each other.
 SELECT pg_try_advisory_lock(152152152);
 
 -- Constant key: 152152152
---   Derived from issue #152 (S12-G-01) to make it easy to identify
---   in pg_locks.  Must NEVER be reused by any other advisory lock
---   in this database.
+--   A fixed key to ensure only one replica runs maintenance per cycle.
+--   Must NEVER be reused by any other advisory lock in this database.
 ```
 
 Release at the end of the maintenance run (or when the connection closes):
@@ -254,7 +252,7 @@ Drops child partitions whose upper bound is on or before the retention cutoff:
 ```sql
 SELECT drop_old_partitions(@retention);
 
--- @retention : int  recommended value 365 (days)
+-- @retention : int  recommended value 90 (days)
 --              pass as a plain integer literal in the SQL string;
 --              the function signature is drop_old_partitions(int).
 ```
@@ -308,11 +306,11 @@ try
 
     await conn.ExecuteAsync(
         "SELECT drop_old_partitions(@retention)",
-        new { retention = 365 }, transaction: tx);
+        new { retention = 90 }, transaction: tx);
 
     long swept = await conn.ExecuteScalarAsync<long>(
         "SELECT sweep_default(@retention)",
-        new { retention = 365 }, transaction: tx);
+        new { retention = 90 }, transaction: tx);
     logger.LogInformation("Swept {Rows} rows from default partition", swept);
 
     await conn.ExecuteAsync(

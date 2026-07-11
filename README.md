@@ -1,14 +1,11 @@
 # vouchfx-telemetry-backend
 
-The deployed, opt-in **telemetry pilot backend** for [vouchfx](https://github.com/tomas-rampas/vouchfx)
-— Phase B of task **S12-G-01** (issue
-[vouchfx#152](https://github.com/tomas-rampas/vouchfx/issues/152)).
+The server half of [vouchfx](https://github.com/tomas-rampas/vouchfx)'s opt-in, privacy-first telemetry system.
 
-> **Status:** complete and ready for deployment. The engine-side transport (Phase A) is merged
-> into the engine repo (vouchfx PR #155) and is **inert** until an endpoint + token are
-> configured; this repository contains the server half (complete, tested, documented).
-> Build, unit, and scheduled Testcontainers integration tests are **green** in CI.
-> Operator deployment (Bicep, secrets, database bootstrap) is required before the system is live.
+> **Status:** complete and tested. The engine-side transport ships in the vouchfx engine and
+> stays inert until an endpoint and token are configured. This repository contains the server half.
+> Operator deployment (Bicep, secrets, database bootstrap) via GitHub Actions is required before
+> the system is live. There is no hosted instance running — telemetry remains local-only unless self-hosted.
 
 ## What it is
 
@@ -27,10 +24,13 @@ touch can reach it — there is nowhere to put it.
 
 ## Documentation
 
+- **[Why telemetry & how to opt in](docs/why-telemetry.md)** — User-facing overview: what telemetry collects, how to enable/disable, and your privacy rights
+- **[Self-hosting without Azure](docs/self-hosting.md)** — Building and running the backend on your own infrastructure
 - **[Wire Contract](docs/wire-contract.md)** — The HTTP API specification (endpoints, status codes, payload schema, deduplication)
 - **[Architecture](docs/architecture.md)** — System design, five-component architecture, PostgreSQL schema, Azure topology
 - **[Operations Runbook](docs/operations.md)** — Deployment procedures, configuration reference, troubleshooting, maintenance tasks
 - **[Privacy Policy](docs/privacy.md)** — Data handling, retention, deletion, and compliance considerations
+- **[Engine telemetry reference](https://tomas-rampas.github.io/vouchfx/docs/telemetry.html)** — CLI-side telemetry configuration in the vouchfx engine
 
 ## Endpoints at a Glance
 

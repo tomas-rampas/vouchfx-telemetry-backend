@@ -1,8 +1,7 @@
 # Operator Handback — Deployment Runbook
 
 **vouchfx Telemetry Backend** — ASP.NET Core 8 + PostgreSQL  
-**Phase:** S12-G-01 (issue [vouchfx#152](https://github.com/tomas-rampas/vouchfx/issues/152)) Phase B  
-**Status:** Engineering-complete. Deployment requires operator provisioning of Azure subscription and GitHub configuration.
+**Status:** Complete and ready for deployment. Deployment requires operator provisioning of Azure subscription and GitHub configuration.
 
 This document provides the precise, step-by-step procedure for an operator to deploy this service to Azure and wire the engine to use it.
 
