@@ -1,0 +1,93 @@
+# .github/workflows/pages.yml — vouchfx-telemetry-backend project site (GitHub Pages)
+#
+# Publishes the static landing page in `site/` PLUS the repository's markdown
+# (the opt-in overview, privacy policy, wire contract, architecture, operations
+# runbook, self-hosting guide, and the project documents), rendered to styled
+# HTML by `scripts/build_site.py`. The markdown files stay the single source
+# of truth; this regenerates their HTML on every run, so the published docs
+# never drift.
+#
+# One-time setup (repository owner): Settings → Pages → Build and deployment →
+# Source: "GitHub Actions".
+
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    # SUPERSET INVARIANT: this list must cover every source path rendered by
+    # scripts/build_site.py's DOCS list (see the invariant comment there) —
+    # docs/** and the four root project documents already do. If a new
+    # top-level doc is ever added outside these globs, add it here too, or a
+    # push that changes it will not trigger a rebuild.
+    paths:
+      - 'site/**'
+      - 'docs/**'
+      - 'README.md'
+      - 'CONTRIBUTING.md'
+      - 'SECURITY.md'
+      - 'CODE_OF_CONDUCT.md'
+      - 'scripts/build_site.py'
+      - '.github/workflows/pages.yml'
+  # Manual runs (any branch) for previewing before a change reaches main.
+  workflow_dispatch:
+
+# Allow the deploy job to publish to Pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One concurrent deployment; let an in-progress run finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment-retry.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.12'
+
+      - name: Install build dependencies
+        run: python -m pip install markdown pygments
+
+      - name: Build site (landing page + rendered docs)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/build_site.py _site
+
+      - name: Configure Pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - name: Upload site artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: _site
+
+      # The Pages service intermittently rejects a freshly created deployment
+      # with "Deployment failed, try again later" (observed on sibling sites;
+      # a retry minutes later succeeds). Absorb that flake with one in-job
+      # retry instead of requiring a human re-run.
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
+        continue-on-error: true
+
+      - name: Wait before retrying a rejected deployment
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 120
+
+      - name: Deploy to GitHub Pages (retry)
+        id: deployment-retry
+        if: steps.deployment.outcome == 'failure'
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0

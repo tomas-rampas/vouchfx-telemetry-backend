@@ -82,3 +82,6 @@ desktop.ini
 ## Agent / tooling scratch
 .claude/
 .serena/
+
+## GitHub Pages build output (scripts/build_site.py)
+_site/
