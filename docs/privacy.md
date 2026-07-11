@@ -1,8 +1,8 @@
 # Privacy Policy & Data Handling
 
-S12-G-01 / Issue #152 Phase B
-
 This document describes what data the telemetry backend collects, stores, and deletes, and the privacy guarantees provided by this implementation.
+
+**Note:** For a user-facing overview of telemetry, opt-in/out mechanics, and data sending, see [Why telemetry & how to opt in](why-telemetry.md). This page is the authoritative home of retention windows (90 days) and deletion commitments (30 days).
 
 ## Data Collection Principles
 

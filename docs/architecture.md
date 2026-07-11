@@ -1,7 +1,5 @@
 # Architecture & System Design
 
-S12-G-01 / Issue #152 Phase B
-
 This document describes the system architecture, component interactions, database schema, and Azure infrastructure topology of the vouchfx telemetry backend.
 
 ## Overview
@@ -236,7 +234,7 @@ Drops every direct child partition of `telemetry_event` whose upper bound satisf
 
 Deletes rows from the DEFAULT partition whose `event_timestamp < now() - make_interval(days => retention_days)`. Returns the row count deleted. Targets clients with broken clocks that produce timestamps outside the explicit partition range.
 
-### Dashboard Views (S12-E-05)
+### Dashboard Views
 
 Read-only views for the telemetry team to inspect aggregate statistics without direct table access.
 
@@ -310,7 +308,7 @@ GROUP BY 1;
 
 **Interval:** Configurable via `VOUCHFX_TELEMETRY_JOB_INTERVAL_HOURS` (default 24; runs immediately at startup, then every 24 hours)
 
-**Concurrency control:** PostgreSQL advisory lock (constant key `152152152`, derived from issue #152). Only one Container App replica runs maintenance per cycle. If the lock cannot be acquired, the cycle is skipped and the next replica waits.
+**Concurrency control:** PostgreSQL advisory lock (constant key `152152152`). Only one replica runs maintenance per cycle. If the lock cannot be acquired, the cycle is skipped and the next replica waits.
 
 **Sequence per cycle:**
 1. Acquire advisory lock (if it fails, skip this cycle)
@@ -435,4 +433,4 @@ This is a **separate GitHub repository** (not vendored in vouchfx). Rationale:
 - **Binary compatibility:** Backend image versioning (SHA/semver tags) is decoupled from engine versioning
 - **Compliance:** Easier to audit and control who has access to production secrets
 
-The engine client (Phase A, merged in PR #155) is inert until a backend endpoint + token are configured. Configuration is driven by optional environment variables (`VOUCHFX_TELEMETRY_ENDPOINT`, `VOUCHFX_TELEMETRY_TOKEN`) that users provide when opting in.
+The engine client is inert until a backend endpoint and token are configured. Configuration is driven by optional environment variables (`VOUCHFX_TELEMETRY_ENDPOINT`, `VOUCHFX_TELEMETRY_TOKEN`) that users provide when opting in.

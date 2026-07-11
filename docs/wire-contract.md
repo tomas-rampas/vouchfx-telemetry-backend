@@ -1,8 +1,6 @@
 # Wire Contract Specification
 
-S12-G-01 / Issue #152 Phase B
-
-This document is the authoritative specification of the HTTP API this backend implements. It cross-references vouchfx engine PR #155 and issue #152.
+This document is the authoritative specification of the HTTP API this backend implements.
 
 ## Overview
 
