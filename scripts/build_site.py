@@ -348,7 +348,7 @@ PORTAL = """<!DOCTYPE html>
       </a>
       <a class="doc-card" href="https://github.com/tomas-rampas/vouchfx-samples" target="_blank" rel="noopener noreferrer">
         <span class="doc-card__k">SAMPLES</span><h3>vouchfx-samples</h3>
-        <p>Three production-grade sample applications with complete <code>.e2e.yaml</code> suites — the engine client that would, if you opt in, be the source of the events this service ingests.</p>
+        <p>Four production-grade sample applications with complete <code>.e2e.yaml</code> suites — the engine client that would, if you opt in, be the source of the events this service ingests.</p>
       </a>
     </div>
   </section>
@@ -380,7 +380,7 @@ def build_portal(facts: dict[str, str]) -> None:
     facts_line = (
         "Live: vouchfx engine {{fact:engine_release}} · "
         "<code>Vouchfx.Sdk</code> {{fact:sdk_version}} · "
-        "{{fact:community_provider_count}} community providers listed in the hub registry "
+        "community providers listed in the hub registry: {{fact:community_provider_count}} "
         "(latest: <code>Vouchfx.Community.JsonRpc</code> {{fact:community_jsonrpc_version}})."
     )
     (OUT / "docs.html").write_text(PORTAL.format(facts_line=facts_line), encoding="utf-8")
@@ -489,7 +489,9 @@ def substitute_facts(facts: dict[str, str]) -> None:
 
     def repl(m: re.Match) -> str:
         key = m.group(1)
-        return facts.get(key, m.group(0))
+        # html.escape defensively (values are version strings today) and keep
+        # unknown tokens literal so a typo is visible in the output.
+        return html.escape(facts[key]) if key in facts else m.group(0)
 
     pattern = re.compile(r"\{\{fact:(\w+)\}\}")
     for html_file in OUT.glob("**/*.html"):
