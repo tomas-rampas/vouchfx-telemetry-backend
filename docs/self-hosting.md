@@ -18,9 +18,9 @@ docker build -t vouchfx-telemetry-backend:latest .
 
 Alternatively, pull from a registry if your operator has published a built image (see your operator's instructions).
 
-### 2. PostgreSQL 15 or later
+### 2. PostgreSQL 16 (the tested and targeted version)
 
-The backend requires PostgreSQL 15+ (tested and targeted on version 16). You can:
+The backend is built and tested on PostgreSQL 16. Earlier versions are untested. You can:
 
 - **Use a local PostgreSQL instance:** `postgresql.org/download/` for self-hosted, or a managed service (AWS RDS, Google Cloud SQL, Digital Ocean, etc.)
 - **Use PostgreSQL in a container:** See examples below
@@ -35,6 +35,7 @@ The schema is fully self-initialising (see §3 below), so you only need a runnin
 docker run --rm \
   --name vfx-postgres \
   -e POSTGRES_PASSWORD=changeme \
+  -e POSTGRES_DB=vfxtelemetry \
   -p 5432:5432 \
   postgres:16
 ```
@@ -42,7 +43,7 @@ docker run --rm \
 Inside the container, PostgreSQL is listening on port 5432. The admin credentials are:
 - Username: `postgres`
 - Password: `changeme` (change this!)
-- Database: `postgres` (will be used to connect for bootstrap; the schema creates `vfxtelemetry` database)
+- Database: `vfxtelemetry` (created by the `-e POSTGRES_DB=vfxtelemetry` flag above)
 
 ### Option B: Local PostgreSQL or managed service
 
@@ -54,13 +55,12 @@ Ensure PostgreSQL is running and note:
 
 ## Step 2: Bootstrap the database schema
 
-The backend's `DbBootstrapper` runs automatically on first startup and executes `deploy/sql/bootstrap.sql`. This:
+The backend's `DbBootstrapper` runs automatically on first startup and executes `deploy/sql/bootstrap.sql` within the existing `vfxtelemetry` database. This:
 
-1. Creates the `vfxtelemetry` database (if it doesn't exist)
-2. Creates all tables: `telemetry_event` (partitioned), `ingest_batch`, `forget_queue`
+1. Creates all tables: `telemetry_event` (partitioned), `ingest_batch`, `forget_queue`
 3. Creates functions: `ensure_partitions`, `ensure_partition`, `drop_old_partitions`, `sweep_default`
 4. Creates views: `v_step_family_daily`, `v_step_provider_daily`, `v_run_daily`
-5. Pre-creates daily partitions for the past 90 days and 7 days ahead
+5. Pre-creates daily partitions from 90 days ago through roughly one week ahead
 
 The bootstrap is fully idempotent and safe to re-run; it uses `CREATE TABLE IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`, etc.
 
@@ -68,10 +68,19 @@ The bootstrap is fully idempotent and safe to re-run; it uses `CREATE TABLE IF N
 
 ```bash
 # Using psql (Postgres command-line client)
-psql -h localhost -U postgres -f deploy/sql/bootstrap.sql
+psql -h localhost -U postgres -d vfxtelemetry -f deploy/sql/bootstrap.sql
 ```
 
 You'll be prompted for the admin password.
+
+**Create database explicitly (for non-containerised PostgreSQL):**
+
+For local or managed PostgreSQL instances, create the database before bootstrap:
+
+```bash
+# Using psql
+psql -h localhost -U postgres -c "CREATE DATABASE vfxtelemetry;"
+```
 
 **Verification:**
 
@@ -102,12 +111,16 @@ Server=<hostname>;Port=<port>;Database=vfxtelemetry;User Id=<username>;Password=
 
 - `Server`: PostgreSQL hostname or IP
 - `Port`: PostgreSQL port (default 5432)
-- `Database`: The database name (created by bootstrap; typically `vfxtelemetry`)
+- `Database`: The database name (must be created before bootstrap runs; typically `vfxtelemetry`)
 - `User Id`: Admin username (e.g. `postgres`)
 - `Password`: Admin password (URL-safe; avoid `@`, `%`, or special chars that need escaping)
 - `SslMode`: `Require` for production (SSL/TLS encryption), `Disable` for local testing
 
+**Note:** The database name is operator-chosen and must match the `Database` value in your connection string. The Azure Bicep template provisions one named `telemetry`; self-hosted deployments typically use `vfxtelemetry`.
+
 ### Optional configuration
+
+<!-- Config table duplicated from Program.cs / docs/operations.md Configuration Reference — update those first -->
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -166,6 +179,7 @@ services:
     image: postgres:16
     environment:
       POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: vfxtelemetry
     ports:
       - "5432:5432"
     healthcheck:
@@ -305,7 +319,7 @@ If you deploy to Azure instead of self-hosting, the Azure path adds:
 - **Point-in-time restore (PITR):** Automatic 7-day backup window (configurable)
 - **Azure Key Vault:** Secure token/credential storage with access controls
 - **Container Apps:** Managed container orchestration, auto-scaling, health probes
-- **Log Analytics:** Centralized logging and monitoring
+- **Log Analytics:** Centralised logging and monitoring
 - **Application Insights:** Performance and error tracking
 
 See [Operations Runbook](operations.md) for the full Azure deployment workflow and Bicep templates.

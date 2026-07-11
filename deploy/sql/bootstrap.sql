@@ -1,7 +1,6 @@
 -- ============================================================
 -- vouchfx Telemetry Backend — PostgreSQL 16 bootstrap
--- S12-G-01 / Issue #152 Phase B
--- Target: Azure Database for PostgreSQL Flexible Server 16
+-- Target: PostgreSQL 16 on Azure Database for PostgreSQL Flexible Server
 --
 -- PURPOSE
 --   Bootstraps all tables, indexes, functions, views, and
@@ -322,7 +321,7 @@ $$;
 
 
 -- ============================================================
--- 5. DASHBOARD VIEWS  (S12-E-05 reads Postgres directly)
+-- 5. DASHBOARD VIEWS
 -- ============================================================
 
 -- ------------------------------------------------------------
