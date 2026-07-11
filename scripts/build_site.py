@@ -131,7 +131,7 @@ def extract_mermaid(text: str) -> tuple[str, list[str]]:
         blocks.append(m.group(1))
         return f"\n@@MERMAID{len(blocks) - 1}@@\n"
 
-    text = re.sub(r"```mermaid\n(.*?)```", grab, text, flags=re.DOTALL)
+    text = re.sub(r"```mermaid\r?\n(.*?)```", grab, text, flags=re.DOTALL)
     return text, blocks
 
 
