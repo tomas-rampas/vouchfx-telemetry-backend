@@ -375,3 +375,12 @@ code { font-family: var(--mono); font-size: .9em; }
     scroll-behavior: auto !important;
   }
 }
+
+/* Site-local override (telemetry landing): long inline code such as
+   %APPDATA%\vouchfx\telemetry-outbox.jsonl must wrap on narrow screens.
+   The copied base rule sets nowrap for short version chips; outside .prose
+   the landing shows full paths, so allow wrapping there. */
+.section code, .hero code, .stat code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

@@ -340,7 +340,7 @@ PORTAL = """<!DOCTYPE html>
     <div class="doc-cards">
       <a class="doc-card" href="https://tomas-rampas.github.io/vouchfx/" target="_blank" rel="noopener noreferrer">
         <span class="doc-card__k">ENGINE</span><h3>vouchfx project site</h3>
-        <p>The engine that produces the telemetry this service ingests. See its <a href="https://tomas-rampas.github.io/vouchfx/docs/telemetry.html">telemetry reference</a> for the CLI-side <code>vouchfx telemetry enable/disable</code> commands and configuration.</p>
+        <p>The engine that produces the telemetry this service ingests — its telemetry reference (docs/telemetry.html on the engine site) covers the CLI-side <code>vouchfx telemetry enable/disable</code> commands and configuration.</p>
       </a>
       <a class="doc-card" href="https://tomas-rampas.github.io/vouchfx-providers/" target="_blank" rel="noopener noreferrer">
         <span class="doc-card__k">HUB</span><h3>vouchfx providers</h3>
