@@ -423,8 +423,10 @@ Once the backend is live and verified, wire the **vouchfx engine** to send telem
 On the machine or container running vouchfx, set:
 
 ```bash
-# The HTTPS endpoint of the deployed backend (without trailing slash)
-export VOUCHFX_TELEMETRY_ENDPOINT=https://<app-fqdn>/v1/telemetry
+# The HTTPS BASE URL of the deployed backend (no /v1/telemetry path — the engine's
+# HTTP transport appends /v1/telemetry and /v1/telemetry/forget itself; a full path
+# here would double it)
+export VOUCHFX_TELEMETRY_ENDPOINT=https://<app-fqdn>
 
 # One of the TELEMETRY_INGEST_TOKENS you generated in §2.2
 export VOUCHFX_TELEMETRY_TOKEN=<bearer-token>
