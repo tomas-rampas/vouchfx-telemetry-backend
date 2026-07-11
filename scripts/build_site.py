@@ -346,7 +346,7 @@ PORTAL = """<!DOCTYPE html>
         <span class="doc-card__k">HUB</span><h3>vouchfx providers</h3>
         <p>The community hub for vouchfx step providers — unrelated data path, same ecosystem.</p>
       </a>
-      <a class="doc-card" href="https://github.com/tomas-rampas/vouchfx-samples" target="_blank" rel="noopener noreferrer">
+      <a class="doc-card" href="https://tomas-rampas.github.io/vouchfx-samples/" target="_blank" rel="noopener noreferrer">
         <span class="doc-card__k">SAMPLES</span><h3>vouchfx-samples</h3>
         <p>Four production-grade sample applications with complete <code>.e2e.yaml</code> suites — the engine client that would, if you opt in, be the source of the events this service ingests.</p>
       </a>
