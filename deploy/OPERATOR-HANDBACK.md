@@ -424,7 +424,7 @@ On the machine or container running vouchfx, set:
 
 ```bash
 # The HTTPS BASE URL of the deployed backend (no /v1/telemetry path — the engine's
-# HTTP transport appends v1/telemetry and v1/telemetry/forget itself; a full path
+# HTTP transport appends /v1/telemetry and /v1/telemetry/forget itself; a full path
 # here would double it)
 export VOUCHFX_TELEMETRY_ENDPOINT=https://<app-fqdn>
 

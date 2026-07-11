@@ -10,11 +10,12 @@ Ordering is implicit — Bicep derives it from output-to-input dependencies:
 
 ```
 uami (inline resource in main.bicep)
-  ├─→ keyVault      (needs uami.properties.principalId for the RBAC grant)
-  └─→ containerApp  (needs uami.id and the KV secret URIs)
+  └─→ keyVault       (needs uami.properties.principalId for the RBAC grant)
 logAnalytics
-  └─→ environment   (needs workspaceId + customerId)
-postgres            (independent — the connection string arrives as a @secure() param)
+  └─→ environment    (needs workspaceId + customerId)
+postgres             (independent — the connection string arrives as a @secure() param)
+containerApp         (deploys last: needs uami.id, keyVault's secret URIs,
+                      and environment's environmentId)
 ```
 
 The **User-Assigned Managed Identity** is deliberately an inline resource in `main.bicep`

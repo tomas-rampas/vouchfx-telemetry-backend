@@ -22,10 +22,12 @@ A single `az deployment group create` against [`main.bicep`](main.bicep) provisi
 [`modules/README.md`](modules/README.md) for the module reference and deployment ordering.
 
 **Secrets flow:** the ingest tokens, the PostgreSQL admin password and the Npgsql connection
-string are `@secure()` deploy-time parameters. They are read from `VFX_*` environment
-variables by the `.bicepparam` files (`readEnvironmentVariable()`), stored encrypted in Key
-Vault, and surfaced to the Container App via Key Vault-backed secret references resolved with
-the UAMI. They are never committed, never logged, and never appear in Bicep outputs.
+string are `@secure()` deploy-time parameters, read from `VFX_*` environment variables by the
+`.bicepparam` files (`readEnvironmentVariable()`). The ingest tokens and the connection string
+are stored encrypted in Key Vault and surfaced to the Container App via Key Vault-backed
+secret references resolved with the UAMI; the admin password is used **only to provision** the
+PostgreSQL server and is not stored anywhere in Azure (keep it in your own secrets manager).
+None of the three is ever committed, logged, or exposed through a Bicep output.
 
 ## Folder contents
 
@@ -149,8 +151,9 @@ and runs the Bicep deployment. It triggers on:
 
 - **Manual dispatch** — repository → **Actions** → **Deploy** → **Run workflow** (branch
   `main`). The image is tagged `sha-<short-commit>`.
-- **Release publication** — publishing a GitHub release tagged `v*.*.*` deploys that tag
-  automatically.
+- **Release publication** — publishing a GitHub release whose tag starts with `v` and
+  matches the workflow's allowlist `^v[0-9A-Za-z.+-]+$` (semver-style, e.g. `v1.2.3` or
+  `v1.2.3-rc.1`) deploys that tag automatically; anything else fails the tag-validation step.
 
 Pipeline steps: checkout → .NET setup → **Azure OIDC login** → compute image tag →
 `az acr build` (server-side, pushes `vouchfx-telemetry-backend:<tag>` and `:latest`) →
