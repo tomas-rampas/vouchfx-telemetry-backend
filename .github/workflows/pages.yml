@@ -30,6 +30,14 @@ on:
       - 'scripts/build_site.py'
       - '.github/workflows/pages.yml'
   # Manual runs (any branch) for previewing before a change reaches main.
+  # Ecosystem fan-out: a sibling repo's docs merge triggers a rebuild here so
+  # build-time facts ({{fact:...}} tokens) re-resolve against the live APIs.
+  repository_dispatch:
+    types: [ecosystem-docs-updated]
+  # Weekly belt-and-braces rebuild (staggered per repo) so facts stay fresh
+  # even if the dispatch fan-out is unavailable (e.g. an expired PAT).
+  schedule:
+    - cron: '37 4 * * 4'
   workflow_dispatch:
 
 # Allow the deploy job to publish to Pages.
@@ -91,3 +99,32 @@ jobs:
         id: deployment-retry
         if: steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
+
+  # Fan-out: after a successful docs deploy caused by a PUSH, ask the sibling
+  # repos to rebuild their sites so their build-time facts refresh. One-hop
+  # guard: dispatch-, cron- and manually-triggered runs never re-notify, so a
+  # cycle is impossible. Requires the ECOSYSTEM_DISPATCH_TOKEN secret (a
+  # fine-grained PAT with Contents read/write on the four vouchfx repos);
+  # loud-skips when absent — the weekly cron then covers freshness.
+  notify:
+    needs: deploy
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch ecosystem-docs-updated to sibling repos
+        env:
+          TOKEN: ${{ secrets.ECOSYSTEM_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::ECOSYSTEM_DISPATCH_TOKEN is not set - sibling sites will refresh on their weekly crons instead."
+            echo "ECOSYSTEM_DISPATCH_TOKEN missing; fan-out skipped." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          for repo in vouchfx vouchfx-providers vouchfx-samples; do
+            if curl -sfS -X POST               -H "Authorization: Bearer $TOKEN"               -H "Accept: application/vnd.github+json"               "https://api.github.com/repos/$GITHUB_REPOSITORY_OWNER/$repo/dispatches"               -d '{"event_type":"ecosystem-docs-updated"}'; then
+              echo "notified $repo" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::warning::failed to notify $repo"
+              echo "FAILED to notify $repo" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
