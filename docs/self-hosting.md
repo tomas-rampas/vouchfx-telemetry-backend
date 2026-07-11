@@ -55,7 +55,7 @@ Ensure PostgreSQL is running and note:
 
 ## Step 2: Bootstrap the database schema
 
-The backend's `DbBootstrapper` runs automatically on first startup and executes `deploy/sql/bootstrap.sql` within the existing `vfxtelemetry` database. This:
+The backend's `DbBootstrapper` runs automatically on every startup (the DDL is idempotent — `CREATE TABLE IF NOT EXISTS` and friends) and executes `deploy/sql/bootstrap.sql` within the existing `vfxtelemetry` database. This:
 
 1. Creates all tables: `telemetry_event` (partitioned), `ingest_batch`, `forget_queue`
 2. Creates the supporting indexes on those tables

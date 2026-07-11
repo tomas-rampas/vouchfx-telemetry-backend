@@ -98,7 +98,7 @@ vouchfx telemetry status
 {
   "schemaVersion": 1,
   "timestamp": "2026-06-28T14:30:00+00:00",
-  "installId": "550e8400…",
+  "installId": "550e8400-e29b-41d4-a716-446655440000",
   "toolVersion": "1.0.0",
   "engineVersion": "1.0.0",
   "dotnetVersion": ".NET 8.0.7",
