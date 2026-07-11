@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>vouchfx telemetry — opt-in, privacy-first usage metrics for vouchfx</title>
+<meta name="description" content="The server half of vouchfx's opt-in telemetry: allowlist-only by construction, 90-day retention, deletable within 30 days, off until you say otherwise, and fail-silent by design." />
+<meta name="theme-color" content="#0b0f1a" />
+<link rel="icon" href="favicon.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="styles.css" />
+<link rel="stylesheet" href="docs.css" />
+</head>
+<body>
+<header class="nav">
+  <div class="nav__inner">
+    <a class="brand" href="index.html" aria-label="vouchfx telemetry home">
+      <span class="brand__mark" aria-hidden="true"></span>
+      <span class="brand__name">vouchfx telemetry</span>
+    </a>
+    <nav class="nav__links" aria-label="Primary">
+      <a href="docs.html">Docs</a>
+      <a href="docs/why-telemetry.html">Why telemetry</a>
+      <a href="https://tomas-rampas.github.io/vouchfx/">Engine docs</a>
+    </nav>
+    <a class="btn btn--ghost nav__gh" href="https://github.com/tomas-rampas/vouchfx-telemetry-backend" target="_blank" rel="noopener noreferrer">GitHub</a>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="hero__glow" aria-hidden="true"></div>
+  <div class="container hero__inner">
+    <span class="badge"><span class="badge__dot"></span> Pilot status: source complete and CI-tested · no hosted instance running · telemetry stays local-only unless you self-host</span>
+    <h1 class="hero__title">Telemetry that <span class="grad">earns trust.</span></h1>
+    <p class="hero__lede">
+      Opt-in, allowlist-only by construction, deletable on request — and off until you say otherwise.
+    </p>
+    <div class="hero__cta">
+      <a class="btn btn--primary" href="docs/why-telemetry.html">Why telemetry, and how to opt in</a>
+      <a class="btn btn--ghost" href="https://github.com/tomas-rampas/vouchfx-telemetry-backend" target="_blank" rel="noopener noreferrer">View on GitHub</a>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== TWO PERSONAS ===================== -->
+<section class="section" id="start">
+  <div class="container">
+    <p class="eyebrow">Start here</p>
+    <h2 class="section__title">Which one are you?</h2>
+    <p class="section__lede">
+      This repository is the server half of a two-sided system: the vouchfx engine collects the events,
+      this service ingests and eventually forgets them.
+    </p>
+    <div class="grid" style="grid-template-columns:repeat(2,1fr)">
+      <article class="card">
+        <h3>Should I opt in?</h3>
+        <p>
+          You run <code>vouchfx</code> and want to know exactly what <code>vouchfx telemetry enable</code>
+          would send, what it never sends, and how to check for yourself before you decide.
+        </p>
+        <p><a href="docs/why-telemetry.html">Read why telemetry, and how to opt in →</a></p>
+      </article>
+      <article class="card">
+        <h3>Run the backend</h3>
+        <p>
+          You want to operate an ingest endpoint — for a team, or just to see the whole loop working —
+          without depending on a hosted instance that does not exist yet.
+        </p>
+        <p><a href="docs/self-hosting.html">Self-host it with Docker or Kubernetes →</a></p>
+        <p><a href="docs/operations.html">…or deploy the Azure pilot path →</a></p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== THE GUARANTEES ===================== -->
+<section class="section section--alt" id="guarantees">
+  <div class="container">
+    <p class="eyebrow">The guarantees</p>
+    <h2 class="section__title">Five structural promises, not five policy promises.</h2>
+    <p class="section__lede">
+      Each of these is enforced by what the code physically does — an allowlisted C# record, a partition-drop
+      job, a fail-silent transport — not only by a paragraph in a policy document. Follow each link to the page
+      that owns it.
+    </p>
+    <div class="doc-list">
+      <a href="docs/why-telemetry.html"><b>Off</b> Off by default — nothing is collected until <code>vouchfx telemetry enable</code></a>
+      <a href="docs/wire-contract.html#telemetryevent-schema"><b>Allowlist</b> Allowlist-only, structurally — unlisted fields have no property to bind to</a>
+      <a href="docs/privacy.html#data-retention"><b>90 days</b> Default retention — partitions past the window are dropped automatically</a>
+      <a href="docs/privacy.html#deletion-forget-workflow"><b>30 days</b> Forget, on request — <code>telemetry disable</code> deletes your install's data</a>
+      <a href="docs/why-telemetry.html#sending-to-a-backend"><b>Fail-silent</b> Never affects a run — unreachable or misconfigured, the run still completes</a>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== SEE FOR YOURSELF ===================== -->
+<section class="section" id="verify">
+  <div class="container">
+    <p class="eyebrow">Trust, verified</p>
+    <h2 class="section__title">Don't take our word for it — read the outbox.</h2>
+    <p class="section__lede">
+      Every event the engine would send is written first to a local NDJSON file on your own machine, before
+      any endpoint is configured. Nothing is transmitted until you set <code>VOUCHFX_TELEMETRY_ENDPOINT</code>
+      — until then, the outbox <em>is</em> the whole story.
+    </p>
+    <div class="grid grid--3">
+      <article class="card">
+        <h3>See for yourself: the local outbox</h3>
+        <p>
+          Inspect <code>%APPDATA%\vouchfx\telemetry-outbox.jsonl</code> (Windows) or
+          <code>~/.config/vouchfx/telemetry-outbox.jsonl</code> (macOS/Linux) line by line — each line is
+          exactly what would be POSTed if a backend were configured.
+        </p>
+        <p><a href="docs/why-telemetry.html#verify-exactly-what-would-be-sent-the-local-outbox">Read the local-outbox walkthrough →</a></p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== DOCS INDEX ===================== -->
+<section class="section section--alt" id="docs">
+  <div class="container">
+    <p class="eyebrow">Documentation</p>
+    <h2 class="section__title">Six pages, rendered from markdown on every push.</h2>
+    <p class="section__lede">
+      The pages below are generated from this repository's own source of truth, so they never drift from the
+      service they describe.
+    </p>
+    <div class="doc-list">
+      <a href="docs/why-telemetry.html"><b>Users</b> Why telemetry, and how to opt in</a>
+      <a href="docs/privacy.html"><b>Users</b> Privacy policy &amp; data handling</a>
+      <a href="docs/wire-contract.html"><b>Ref</b> Wire contract</a>
+      <a href="docs/architecture.html"><b>Ref</b> Architecture &amp; system design</a>
+      <a href="docs/operations.html"><b>Ops</b> Operations runbook (Azure pilot)</a>
+      <a href="docs/self-hosting.html"><b>Ops</b> Self-hosting without Azure</a>
+    </div>
+    <p class="note"><a href="docs.html">Browse the full documentation index →</a></p>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="container footer__inner">
+    <div class="footer__brand">
+      <span class="brand__mark" aria-hidden="true"></span>
+      <div>
+        <strong>vouchfx telemetry</strong>
+        <p>Opt-in, allowlist-only-by-construction usage metrics for the vouchfx engine — this is the server half.</p>
+      </div>
+    </div>
+    <div class="footer__links">
+      <a href="docs.html">Documentation</a>
+      <a href="https://tomas-rampas.github.io/vouchfx/" target="_blank" rel="noopener noreferrer">Engine site</a>
+      <a href="https://tomas-rampas.github.io/vouchfx-providers/" target="_blank" rel="noopener noreferrer">Provider hub</a>
+      <a href="https://github.com/tomas-rampas/vouchfx-samples" target="_blank" rel="noopener noreferrer">Sample applications</a>
+      <a href="https://github.com/tomas-rampas/vouchfx-telemetry-backend" target="_blank" rel="noopener noreferrer">Repository</a>
+      <a href="https://github.com/tomas-rampas/vouchfx-telemetry-backend/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">Licence (Apache-2.0)</a>
+    </div>
+  </div>
+</footer>
+</body>
+</html>
