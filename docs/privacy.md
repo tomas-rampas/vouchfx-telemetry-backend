@@ -113,6 +113,8 @@ An install ID is **not** a user ID or device ID. Deleting it severs the link bet
 
 ### Deletion Guarantees
 
+- **Public commitment (outer bound):** deletion is complete within **30 days** of the request — the
+  figure quoted across the vouchfx documentation. In practice the mechanisms below finish far sooner.
 - **Active-store SLA:** ≤24 hours (next maintenance job cycle) for deletion from live PostgreSQL
 - **Dedup-record cleanup:** Automatic within 35 days (or sooner if the daily job runs)
 - **PITR residue:** Forgotten data remains in backups for up to 7 days (Azure default)

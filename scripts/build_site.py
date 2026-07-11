@@ -434,7 +434,7 @@ def fetch_facts() -> dict[str, str]:
         releases = _fetch_json("https://api.github.com/repos/tomas-rampas/vouchfx/releases")
         release = next(r for r in releases if not r.get("draft"))  # type: ignore[union-attr]
         live["engine_release"] = release["tag_name"]
-    except (urllib.error.URLError, TimeoutError, ValueError, KeyError, StopIteration, TypeError) as exc:
+    except (urllib.error.URLError, TimeoutError, ValueError, KeyError, StopIteration, TypeError, AttributeError) as exc:
         print(f"  fact engine_release: live fetch failed ({exc}); using fallback")
 
     try:

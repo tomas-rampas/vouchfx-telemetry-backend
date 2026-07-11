@@ -1,7 +1,7 @@
 /* ===================== DOC PAGES =====================
    Loaded after styles.css, so all :root tokens are available.
    Covers the documentation portal (docs.html) and the rendered
-   markdown pages (docs/**, README, CHANGELOG, GOVERNANCE). */
+   markdown pages (docs/**, README and the project set). */
 
 /* ---- Portal index ---- */
 .portal { padding: 64px 0 96px; }
