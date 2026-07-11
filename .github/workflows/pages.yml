@@ -121,7 +121,7 @@ jobs:
             exit 0
           fi
           for repo in vouchfx vouchfx-providers vouchfx-samples; do
-            if curl -sf -X POST               -H "Authorization: Bearer $TOKEN"               -H "Accept: application/vnd.github+json"               "https://api.github.com/repos/tomas-rampas/$repo/dispatches"               -d '{"event_type":"ecosystem-docs-updated"}'; then
+            if curl -sfS -X POST               -H "Authorization: Bearer $TOKEN"               -H "Accept: application/vnd.github+json"               "https://api.github.com/repos/$GITHUB_REPOSITORY_OWNER/$repo/dispatches"               -d '{"event_type":"ecosystem-docs-updated"}'; then
               echo "notified $repo" >> "$GITHUB_STEP_SUMMARY"
             else
               echo "::warning::failed to notify $repo"
