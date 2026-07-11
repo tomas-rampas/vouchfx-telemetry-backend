@@ -225,9 +225,7 @@ The backend is the server side of the frozen `/v1/telemetry` wire contract
 drains its local telemetry outbox to this backend after each test run — locally or from any
 CI pipeline that runs vouchfx suites.
 
-### 5.1 The two environment variables
-
-Wherever vouchfx runs (developer machine, CI job, container), set:
+### 5.1 Local (developer machine): two variables + explicit consent
 
 ```bash
 # BASE URL only — the engine appends /v1/telemetry (and /v1/telemetry/forget) itself
@@ -235,52 +233,68 @@ export VOUCHFX_TELEMETRY_ENDPOINT=https://<app-fqdn>
 
 # One of the tokens from the TELEMETRY_INGEST_TOKENS secret (step 2)
 export VOUCHFX_TELEMETRY_TOKEN=<bearer-token>
+
+vouchfx telemetry enable    # persists consent + mints the anonymous install ID
+vouchfx telemetry status    # inspect the current state
 ```
 
 > **Do not** include the `/v1/telemetry` path in the endpoint — the engine's HTTP transport
 > resolves it relative to the base URL, so a full path would double it.
 
-### 5.2 Consent is still required (opt-in by design)
+### 5.2 CI: environment-configured telemetry (three variables, no enable step)
 
-Telemetry is emitted only when **all three** hold: consent is enabled, the run does not pass
-`--no-telemetry`, and `VOUCHFX_NO_TELEMETRY` is unset. Setting the endpoint variables alone
-sends nothing.
+CI runners are ephemeral, so the local consent flow would mint a **fresh install ID on
+every job** — each run would show up in this backend as a new install. Instead, CI uses
+*environment-configured telemetry*: a third variable supplies a **stable per-repo install
+ID**, and providing all three variables *is* the opt-in — no `telemetry enable` step at all.
 
-```bash
-vouchfx telemetry enable    # persists consent + mints the anonymous install ID
-vouchfx telemetry status    # inspect the current state
-```
+One-time setup per consumer repository (Settings → Secrets and variables → Actions):
+
+| Name | Kind | Value |
+|---|---|---|
+| `VOUCHFX_TELEMETRY_ENDPOINT` | variable | `https://<app-fqdn>` |
+| `VOUCHFX_TELEMETRY_INSTALL_ID` | variable | any GUID, generated once (`uuidgen`) |
+| `VOUCHFX_TELEMETRY_TOKEN` | **secret** | one of the `TELEMETRY_INGEST_TOKENS` values |
+
+Any of the three missing → the engine stays inert. `VOUCHFX_NO_TELEMETRY=1` always forces
+telemetry off, in CI and locally alike.
 
 ### 5.3 Wiring a GitHub Actions job that runs vouchfx
 
-CI runners are ephemeral, so consent must be granted inside the job. A caller job that runs
-vouchfx directly:
+Via the reusable suite-runner workflow (which plumbs the three values through for you):
 
 ```yaml
 jobs:
   e2e:
-    runs-on: ubuntu-latest
-    env:
-      VOUCHFX_TELEMETRY_ENDPOINT: ${{ vars.VOUCHFX_TELEMETRY_ENDPOINT }}   # https://<app-fqdn>
-      VOUCHFX_TELEMETRY_TOKEN: ${{ secrets.VOUCHFX_TELEMETRY_TOKEN }}
-    steps:
-      # ... install/build vouchfx ...
-      - run: vouchfx telemetry enable      # ephemeral runner → opt in per job
-      - run: vouchfx run ./tests/e2e
+    uses: tomas-rampas/vouchfx/.github/workflows/vouchfx-run.yml@<commit-sha>
+    with:
+      scenario-path: ./tests/e2e
+      telemetry-endpoint: ${{ vars.VOUCHFX_TELEMETRY_ENDPOINT }}
+      telemetry-install-id: ${{ vars.VOUCHFX_TELEMETRY_INSTALL_ID }}
+    secrets:
+      telemetry-token: ${{ secrets.VOUCHFX_TELEMETRY_TOKEN }}
 ```
+
+Or in a job that invokes the vouchfx CLI directly, simply set the same three values as job
+`env:` — the engine reads them itself:
+
+```yaml
+    env:
+      VOUCHFX_TELEMETRY_ENDPOINT: ${{ vars.VOUCHFX_TELEMETRY_ENDPOINT }}
+      VOUCHFX_TELEMETRY_INSTALL_ID: ${{ vars.VOUCHFX_TELEMETRY_INSTALL_ID }}
+      VOUCHFX_TELEMETRY_TOKEN: ${{ secrets.VOUCHFX_TELEMETRY_TOKEN }}
+```
+
+(GitLab consumers set the same three names as project CI/CD variables — the token masked —
+and the engine picks them up directly; the GitLab template needs no extra configuration.)
 
 Notes:
 
-- The vouchfx repository ships a **reusable suite-runner workflow**
-  (`tomas-rampas/vouchfx/.github/workflows/vouchfx-run.yml`, `on: workflow_call`). It does
-  not currently expose telemetry inputs, and reusable workflows do **not** inherit the
-  caller's `env:` — so telemetry wiring applies to jobs that invoke the vouchfx CLI
-  directly, as above.
-- To *guarantee* no telemetry from automated suites instead, set `VOUCHFX_NO_TELEMETRY=1`
-  in the job.
 - Token rotation: update the `TELEMETRY_INGEST_TOKENS` secret in **this** repository,
   re-run the Deploy workflow (the Container App restarts and re-reads Key Vault), then
   update the consumer-side `VOUCHFX_TELEMETRY_TOKEN` secret.
+- Because every run of a repo reuses the same install ID, this backend's per-install
+  aggregation reflects real adoption instead of one phantom install per CI job.
 
 The full engine-side reference (outbox caps, forget flow, batch format) is in the engine
 repository's `docs/telemetry.md` and in
