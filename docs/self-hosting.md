@@ -58,6 +58,7 @@ Ensure PostgreSQL is running and note:
 The backend's `DbBootstrapper` runs automatically on first startup and executes `deploy/sql/bootstrap.sql` within the existing `vfxtelemetry` database. This:
 
 1. Creates all tables: `telemetry_event` (partitioned), `ingest_batch`, `forget_queue`
+2. Creates the supporting indexes on those tables
 3. Creates functions: `ensure_partitions`, `ensure_partition`, `drop_old_partitions`, `sweep_default`
 4. Creates views: `v_step_family_daily`, `v_step_provider_daily`, `v_run_daily`
 5. Pre-creates daily partitions from 90 days ago through roughly one week ahead
@@ -113,7 +114,7 @@ Server=<hostname>;Port=<port>;Database=vfxtelemetry;User Id=<username>;Password=
 - `Port`: PostgreSQL port (default 5432)
 - `Database`: The database name (must be created before bootstrap runs; typically `vfxtelemetry`)
 - `User Id`: Admin username (e.g. `postgres`)
-- `Password`: Admin password (URL-safe; avoid `@`, `%`, or special chars that need escaping)
+- `Password`: Admin password (in Npgsql keyword format only `;` and quotes need escaping — wrap the value in single quotes if it contains either)
 - `SslMode`: `Require` for production (SSL/TLS encryption), `Disable` for local testing
 
 **Note:** The database name is operator-chosen and must match the `Database` value in your connection string. The Azure Bicep template provisions one named `telemetry`; self-hosted deployments typically use `vfxtelemetry`.
@@ -307,7 +308,12 @@ export VOUCHFX_TELEMETRY_TOKEN="my-ingest-token"
 vouchfx run …
 ```
 
-The engine will collect telemetry during the run and attempt to POST it to your backend. If the endpoint is unreachable or the token is invalid, the engine stays silent (fail-silent guarantee) and the run completes normally; events accumulate in the local outbox and will retry on the next run.
+> **TLS note:** the container itself serves plain HTTP on port 8080 (`ASPNETCORE_URLS=http://+:8080`) —
+> it does not terminate TLS. For an `https://` endpoint, put a TLS-terminating reverse proxy or
+> ingress in front of the container. Plain `http://host:8080` is fine for local testing, but the
+> Bearer token and payload traverse cleartext, so use HTTPS for anything beyond localhost.
+
+The engine will collect telemetry during the run and attempt to POST it to your backend. If the endpoint is unreachable or the token is invalid, the engine stays silent (fail-silent guarantee) and the run completes normally; events accumulate in the local outbox and are retried on a subsequent run (the engine backs off between failed drain attempts).
 
 For full details on client-side telemetry configuration, see the [vouchfx engine's telemetry documentation](https://tomas-rampas.github.io/vouchfx/docs/telemetry.html).
 

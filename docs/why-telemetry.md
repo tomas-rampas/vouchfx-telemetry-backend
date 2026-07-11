@@ -28,7 +28,7 @@ The backend stores only the fields listed in the **allowlist** (see [Wire Contra
 - Scenario names or test intent
 - Test data, fixtures, or payloads
 
-The **physical guarantee:** The `TelemetryEvent` record on the backend is an explicit allowlist of permitted fields. Any field not declared on this record has no C# property to bind to during JSON deserialization, and therefore **cannot be stored no matter how the client sends it**. This absence is structural — the data has nowhere to live.
+The **physical guarantee:** The `TelemetryEvent` record on the backend is an explicit allowlist of permitted fields. Any field not declared on this record has no C# property to bind to during JSON deserialisation, and therefore **cannot be stored no matter how the client sends it**. This absence is structural — the data has nowhere to live.
 
 <!-- Field summary duplicated from docs/wire-contract.md — update that first -->
 
@@ -135,7 +135,7 @@ export VOUCHFX_TELEMETRY_TOKEN="my-ingest-token"
 vouchfx run …
 ```
 
-**Failure mode:** If the endpoint is unreachable, the token is invalid, or the network is offline, the engine stays silent — telemetry is **never sent over a broken pipe**, and the run completes normally. The local outbox accumulates unsent events; they will be retried on the next run.
+**Failure mode:** If the endpoint is unreachable, the token is invalid, or the network is offline, the engine stays silent — telemetry is **never sent over a broken pipe**, and the run completes normally. The local outbox accumulates unsent events; they will be retried on a subsequent run (the engine backs off between failed drain attempts).
 
 For configuration details and troubleshooting, see the [engine's telemetry reference](https://tomas-rampas.github.io/vouchfx/docs/telemetry.html).
 
