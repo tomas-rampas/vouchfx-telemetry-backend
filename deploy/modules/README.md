@@ -8,14 +8,21 @@ provisions and how they chain together.
 
 Ordering is implicit — Bicep derives it from output-to-input dependencies:
 
-```
-uami (inline resource in main.bicep)
-  └─→ keyVault       (needs uami.properties.principalId for the RBAC grant)
-logAnalytics
-  └─→ environment    (needs workspaceId + customerId)
-postgres             (independent — the connection string arrives as a @secure() param)
-containerApp         (deploys last: needs uami.id, keyVault's secret URIs,
-                      and environment's environmentId)
+```mermaid
+graph TD
+    A["UAMI<br/>(inline resource in main.bicep)"]
+    B["keyVault<br/>(needs UAMI principalId<br/>for RBAC grant)"]
+    C["logAnalytics"]
+    D["environment<br/>(needs workspaceId +<br/>customerId)"]
+    E["postgres<br/>(independent)"]
+    F["containerApp<br/>(deploys last)"]
+    
+    A -->|provides principalId| B
+    C -->|provides workspaceId +<br/>customerId| D
+    B -->|secret URIs| F
+    D -->|environmentId| F
+    A -->|UAMI id| F
+    E -->|connection string<br/>via parameter| F
 ```
 
 The **User-Assigned Managed Identity** is deliberately an inline resource in `main.bicep`
