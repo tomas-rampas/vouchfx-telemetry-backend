@@ -34,7 +34,7 @@ The backend stores only these aggregate, non-identifying metrics per run:
 | Timing metrics | startupMs: 5000, timeToFirstTestMs: 8500 | Non-identifying wall-clock durations (milliseconds) |
 | Timestamp | ISO8601 in UTC | When this run ended (client-reported) |
 
-**Closed taxonomies:** Step families (`http`, `db-assert`, `mq-publish`, `mq-expect`, `webhook-listen`, `script`) and step providers (`http.rest`, `db-assert.postgres`, `mq-publish.kafka`, etc.) are frozen enumerations. Any custom/non-Core provider step is bucketed under a generic `"custom"` key so that author-chosen step kind identifiers (which might contain customer names or project identifiers) are never transmitted.
+**Closed taxonomies:** Step families (all eleven Core families: `http`, `db-assert`, `mq-publish`, `mq-expect`, `cache-assert`, `mail-expect`, `webhook-listen`, `metrics-assert`, `storage-assert`, `trace-expect`, `script`) and step providers (the twenty-five Core `family.provider` ids — `http.rest`, `db-assert.postgres`, `mq-publish.kafka`, etc.; the [engine README](https://github.com/tomas-rampas/vouchfx#readme) carries the full catalogue) are frozen enumerations. Any custom/non-Core provider step is bucketed under a generic `"custom"` key so that author-chosen step kind identifiers (which might contain customer names or project identifiers) are never transmitted. (Engines released up to `v1.0.0-alpha.5` counted only the original six families and six provider ids; on those versions the remaining Core steps also appear under `"custom"`.)
 
 ## Installation ID
 
