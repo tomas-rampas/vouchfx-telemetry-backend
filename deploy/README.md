@@ -33,13 +33,13 @@ None of the three is ever committed, logged, or exposed through a Bicep output.
 
 ```
 deploy/
-├── main.bicep              # Orchestrator (targetScope: resourceGroup)
-├── modules/                # One module per Azure resource (see modules/README.md)
-├── parameters/
-│   ├── dev.bicepparam      # Non-secret dev parameters (Burstable B1ms, 30-day retention)
-│   └── prod.bicepparam     # Non-secret prod parameters (GP D2s_v3, 90-day retention)
-├── sql/bootstrap.sql       # DB schema (applied automatically at service startup)
-└── OPERATOR-HANDBACK.md    # Full operator runbook: verification, troubleshooting, hardening
+|-- main.bicep              # Orchestrator (targetScope: resourceGroup)
+|-- modules/                # One module per Azure resource (see modules/README.md)
+|-- parameters/
+|   |-- dev.bicepparam      # Non-secret dev parameters (Burstable B1ms, 30-day retention)
+|   `-- prod.bicepparam     # Non-secret prod parameters (GP D2s_v3, 90-day retention)
+|-- sql/bootstrap.sql       # DB schema (applied automatically at service startup)
+`-- OPERATOR-HANDBACK.md    # Full operator runbook: verification, troubleshooting, hardening
 ```
 
 ## Prerequisites
