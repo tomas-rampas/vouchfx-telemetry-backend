@@ -85,3 +85,7 @@ desktop.ini
 
 ## GitHub Pages build output (scripts/build_site.py)
 _site/
+
+## Python (scripts/build_site.py site generator)
+__pycache__/
+*.pyc
