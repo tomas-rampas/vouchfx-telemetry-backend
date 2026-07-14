@@ -7,10 +7,15 @@
 
 The server half of [vouchfx](https://github.com/tomas-rampas/vouchfx)'s opt-in, privacy-first telemetry system.
 
-> **Status:** complete and tested. The engine-side transport ships in the vouchfx engine and
-> stays inert until an endpoint and token are configured. This repository contains the server half.
-> Operator deployment (Bicep, secrets, database bootstrap) via GitHub Actions is required before
-> the system is live. There is no hosted instance running — telemetry remains local-only unless self-hosted.
+> **Status (post-pilot, 2026-07): self-host reference — no maintainer-hosted instance is
+> planned.** The pilot programme this backend was built for has been discontinued; the code is
+> complete, tested and kept as the reference implementation of the frozen `/v1/telemetry` wire
+> contract. The engine-side transport ships in the vouchfx engine and stays inert until an
+> endpoint and token are configured, so engine telemetry remains local-only unless **you**
+> deploy this backend yourself ([self-hosting guide](docs/self-hosting.md), or the retained
+> [Azure/Bicep deployment](deploy/README.md)). The coverage badge measures the unit-testable
+> surface; the PostgreSQL persistence and background-maintenance layers are covered separately
+> by the Testcontainers [integration suite](.github/workflows/integration.yml).
 
 ## What it is
 

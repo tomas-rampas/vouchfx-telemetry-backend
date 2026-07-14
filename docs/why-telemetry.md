@@ -156,7 +156,7 @@ For details on how deletion is processed and its guarantees, see [Privacy Policy
 
 **Default retention:** 90 days. Telemetry events older than 90 days are automatically deleted on a daily maintenance job. You can configure a different retention window when deploying a backend.
 
-**Pilot status:** The vouchfx telemetry backend is complete and tested. **No hosted instance is currently running.** If you self-host a backend, you operate and own the database; retention and deletion are your responsibility.
+**Status (post-pilot):** The vouchfx telemetry backend is complete and tested, and is maintained as a **self-host reference implementation** — the pilot programme it was built for has been discontinued and **no maintainer-hosted instance is running or planned**. If you self-host a backend, you operate and own the database; retention and deletion are your responsibility.
 
 For authoritative details on data retention, how the backend processes deletions, and compliance considerations, see [Privacy Policy](privacy.md).
 

@@ -1,7 +1,13 @@
 # Operator Handback — Deployment Runbook
 
 **vouchfx Telemetry Backend** — ASP.NET Core 8 + PostgreSQL  
-**Status:** Complete and ready for deployment. Deployment requires operator provisioning of Azure subscription and GitHub configuration.
+**Status (post-pilot, 2026-07):** retained as a **reference runbook for self-hosters**. The pilot
+programme this deployment was prepared for has been discontinued and **no maintainer-hosted
+deployment is planned** — executing this runbook is a self-hoster's choice, not a pending
+maintainer action. The procedure below was verified against the Bicep templates in this folder
+but has never been executed against a live Azure subscription; expect the documented first-run
+partial failure (§ DB_CONNECTION_STRING chicken-and-egg) and treat the hardening items in § 6 as
+mandatory reading before any production use.
 
 This document provides the precise, step-by-step procedure for an operator to deploy this service to Azure and wire the engine to use it.
 

@@ -1,0 +1,89 @@
+# .github/workflows/dco.yml — DCO (Developer Certificate of Origin) sign-off check
+#
+# Fails if any commit in a pull request lacks a "Signed-off-by:" trailer.
+# The DCO trailer is required for all contributions to this repository
+# (see CONTRIBUTING.md).
+#
+# Authors add the trailer via:
+#   git commit --signoff            # add signoff to the next commit
+#   git commit --amend --signoff    # add signoff to the most recent commit
+#   git rebase --signoff HEAD~N     # add signoff to the last N commits
+#
+# Implementation
+# --------------
+# Uses actions/github-script to list all commits on the PR via the GitHub API
+# and inspects each commit message for a "Signed-off-by: Name <email>" line
+# conforming to DCO 1.1 (https://developercertificate.org/).
+#
+# SECURITY NOTE — script-injection prevention
+# -------------------------------------------
+# PR titles, body, and commit messages are attacker-controlled strings.
+# They are NEVER interpolated inside a run: shell via ${{ }}.
+# All PR and commit data is accessed exclusively through the
+# actions/github-script JavaScript context object, where values are treated
+# as data rather than as shell commands.
+
+name: DCO sign-off check
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  dco:
+    name: DCO sign-off check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Verify Signed-off-by trailer on every PR commit
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          # SECURITY: PR commit messages are accessed only through the API
+          # response object inside JavaScript — never via ${{ }} in a run: shell.
+          script: |
+            // DCO 1.1 sign-off pattern: "Signed-off-by: Full Name <email@example.com>"
+            // The name and email are deliberately not further validated here —
+            // that is a human-review concern, not a mechanical gate.
+            const signoffPattern = /^Signed-off-by:\s+\S+.+<[^>]+@[^>]+>[ \t]*$/m;
+
+            const commits = await github.paginate(
+              github.rest.pulls.listCommits,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.payload.pull_request.number,
+                per_page: 100,
+              }
+            );
+
+            const unsigned = commits.filter(c => !signoffPattern.test(c.commit.message));
+
+            if (unsigned.length === 0) {
+              core.info(`All ${commits.length} commit(s) carry a Signed-off-by trailer. DCO check passed.`);
+              return;
+            }
+
+            const list = unsigned
+              .map(c => `  ${c.sha.substring(0, 7)}  ${c.commit.message.split('\n')[0]}`)
+              .join('\n');
+
+            core.setFailed(
+              `DCO check failed: ${unsigned.length} of ${commits.length} commit(s) ` +
+              `are missing a "Signed-off-by:" trailer.\n\n` +
+              `Unsigned commits:\n${list}\n\n` +
+              `To fix, add the trailer to each affected commit:\n` +
+              `  git commit --amend --signoff          # when only the most recent commit is unsigned\n` +
+              // Rebase over ALL PR commits, not just the unsigned count: the
+              // unsigned ones need not be the most recent N, and --signoff is
+              // safe on already-signed commits (git does not duplicate an
+              // identical trailer).
+              `  git rebase --signoff HEAD~${commits.length}            # rewrites every PR commit\n\n` +
+              `See https://developercertificate.org/ for details.`
+            );
