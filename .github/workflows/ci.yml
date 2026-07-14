@@ -181,7 +181,7 @@ jobs:
           -reports:"TestResults/**/coverage.cobertura.xml"
           -targetdir:badge-out
           -reporttypes:"Badges;JsonSummary"
-          -assemblyfilters:"+Vouchfx.*"
+          -assemblyfilters:"+Vouchfx.*;-*.Tests;-*.UnitTests;-*.TestSupport"
 
       # Compose the shields.io endpoint JSON
       # (https://shields.io/badges/endpoint-badge) the README renders via
@@ -190,6 +190,9 @@ jobs:
       - name: Compose shields endpoint JSON
         run: |
           pct=$(jq -r '.summary.linecoverage' badge-out/Summary.json)
+          # Fail loudly on a non-numeric percentage (e.g. null when the filter
+          # matched nothing) — better no badge update than a "null%" badge.
+          [[ "$pct" =~ ^[0-9]+(\.[0-9]+)?$ ]] || { echo "unexpected linecoverage: '$pct'" >&2; exit 1; }
           jq -n --argjson pct "$pct" '{
             schemaVersion: 1,
             label: "coverage",
