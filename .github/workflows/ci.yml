@@ -8,6 +8,10 @@
 # This job does NOT start Docker.  Testcontainers-based integration tests live in
 # integration.yml and run on a separate schedule.
 #
+# coverage-badge (main pushes only, non-blocking) turns the unit-test Cobertura
+# coverage into a shields.io endpoint JSON on the orphan `badges` branch, which
+# feeds the README's self-hosted coverage badge — no coverage service.
+#
 # SDK version is read from global.json (8.0.400, rollForward: latestFeature).
 # NuGet packages are cached keyed on all .csproj files + global.json so a
 # dependency change busts the cache while a source-only change reuses it.
@@ -63,6 +67,9 @@ jobs:
         run: dotnet format --verify-no-changes Vouchfx.Telemetry.Backend.sln
 
       # Run unit tests only (no Docker required).
+      # --collect:"XPlat Code Coverage" writes Cobertura XML via
+      # coverlet.collector (referenced by the test project); the
+      # coverage-badge job below turns it into the README's coverage badge.
       - name: Unit tests
         run: >
           dotnet test
@@ -71,6 +78,8 @@ jobs:
           --no-build
           --logger "trx;LogFileName=unit-results.trx"
           --logger "console;verbosity=normal"
+          --collect:"XPlat Code Coverage"
+          --results-directory TestResults
 
       - name: Upload test results
         if: always()
@@ -78,6 +87,13 @@ jobs:
         with:
           name: unit-test-results
           path: '**/*.trx'
+          retention-days: 7
+
+      - name: Upload coverage artefacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: coverage
+          path: TestResults/
           retention-days: 7
 
   # ────────────────────────────────────────────────────────────────────────────
@@ -107,3 +123,91 @@ jobs:
       # A non-zero exit from `docker build` fails the job and blocks the PR.
       - name: Build Docker image
         run: docker build -f Dockerfile -t vfxtel:ci-check .
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # coverage-badge — self-hosted coverage badge, cosmetic, NON-BLOCKING.
+  #
+  # Turns the Cobertura XML produced by build-and-test into a shields.io
+  # endpoint JSON + SVG via ReportGenerator + jq and force-pushes them to the
+  # orphan `badges` branch (single commit — no history growth).  The README
+  # renders the JSON through img.shields.io/endpoint, so the coverage number
+  # stays entirely self-hosted (no coverage service, no new credentials).
+  #
+  # Runs only for pushes to main — PR runs must never move the published
+  # badge.  A red build-and-test skips this job via `needs`, retaining the
+  # last good badge.  contents: write is scoped to this job only (it runs no
+  # build/test code, it only consumes the artifact).
+  # ────────────────────────────────────────────────────────────────────────────
+  coverage-badge:
+    name: Coverage badge (main only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    continue-on-error: true            # cosmetic — must never redden CI
+    permissions:
+      contents: write                  # push to the `badges` branch (this job only)
+
+    steps:
+      - name: Download coverage artefacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: coverage
+          path: TestResults
+
+      # No checkout in this job, so pin the SDK channel directly instead of
+      # reading global.json; ReportGenerator only needs a .NET 8 runtime.
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Install ReportGenerator
+        run: dotnet tool install --global dotnet-reportgenerator-globaltool --version 5.5.10
+
+      # JsonSummary yields Summary.json (machine-readable percentages); Badges
+      # yields badge_linecoverage.svg, kept alongside the endpoint JSON as a
+      # zero-third-party fallback.  (Verified on 5.5.10: Badges does NOT emit
+      # a shields endpoint JSON — only pre-coloured SVGs — hence the compose
+      # step below.)
+      - name: Generate coverage summary + badge SVG
+        run: >
+          reportgenerator
+          -reports:"TestResults/**/coverage.cobertura.xml"
+          -targetdir:badge-out
+          -reporttypes:"Badges;JsonSummary"
+          -assemblyfilters:"+Vouchfx.*"
+
+      # Compose the shields.io endpoint JSON
+      # (https://shields.io/badges/endpoint-badge) the README renders via
+      # img.shields.io/endpoint.  Colour thresholds: red below 60 %, yellow
+      # to 75 %, green to 90 %, brightgreen above.
+      - name: Compose shields endpoint JSON
+        run: |
+          pct=$(jq -r '.summary.linecoverage' badge-out/Summary.json)
+          jq -n --argjson pct "$pct" '{
+            schemaVersion: 1,
+            label: "coverage",
+            message: "\($pct)%",
+            color: (if $pct >= 90 then "brightgreen"
+                    elif $pct >= 75 then "green"
+                    elif $pct >= 60 then "yellow"
+                    else "red" end)
+          }' > badge-out/coverage-endpoint.json
+          cat badge-out/coverage-endpoint.json
+
+      # Orphan single-commit publish: git init + force-push replaces the branch
+      # wholesale each run.  `badges` is not a CI trigger branch, so this push
+      # cannot re-trigger CI.  The token reaches git via env, never
+      # interpolated into the script text.
+      - name: Publish to badges branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd badge-out
+          git init -b badges
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add coverage-endpoint.json badge_linecoverage.svg
+          git commit -m "coverage badge for ${GITHUB_SHA}"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" badges

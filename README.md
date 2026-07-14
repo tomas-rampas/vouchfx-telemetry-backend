@@ -1,5 +1,10 @@
 # vouchfx-telemetry-backend
 
+[![CI](https://github.com/tomas-rampas/vouchfx-telemetry-backend/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tomas-rampas/vouchfx-telemetry-backend/actions/workflows/ci.yml?query=branch%3Amain)
+[![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftomas-rampas%2Fvouchfx-telemetry-backend%2Fbadges%2Fcoverage-endpoint.json)](https://github.com/tomas-rampas/vouchfx-telemetry-backend/actions/workflows/ci.yml?query=branch%3Amain)
+[![Docs](https://img.shields.io/badge/docs-GitHub_Pages-blue)](https://tomas-rampas.github.io/vouchfx-telemetry-backend/)
+[![License](https://img.shields.io/github/license/tomas-rampas/vouchfx-telemetry-backend)](https://github.com/tomas-rampas/vouchfx-telemetry-backend/blob/main/LICENSE)
+
 The server half of [vouchfx](https://github.com/tomas-rampas/vouchfx)'s opt-in, privacy-first telemetry system.
 
 > **Status:** complete and tested. The engine-side transport ships in the vouchfx engine and
