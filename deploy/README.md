@@ -1,5 +1,11 @@
 # Deploying the vouchfx Telemetry Backend to Azure
 
+> **Post-pilot note (2026-07):** this deployment apparatus is retained as **reference material
+> for self-hosters** — no maintainer-hosted deployment is planned, and these templates are not
+> exercised by any live environment (the Deploy workflow has never run). They were verified by
+> Bicep compilation and review, not by a production deployment; validate in your own `dev`
+> environment first.
+
 This folder contains the **Bicep infrastructure-as-code** that deploys the vouchfx telemetry
 backend (ASP.NET Core 8 + PostgreSQL) to Azure, and the parameter files consumed by the
 CI/CD pipeline. This README is the step-by-step guide; the exhaustive operator runbook

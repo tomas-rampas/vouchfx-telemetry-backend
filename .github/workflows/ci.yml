@@ -11,6 +11,12 @@
 # coverage-badge (main pushes only, non-blocking) turns the unit-test Cobertura
 # coverage into a shields.io endpoint JSON on the orphan `badges` branch, which
 # feeds the README's self-hosted coverage badge — no coverage service.
+# The badge is labelled "unit coverage" and deliberately scoped to the
+# unit-testable surface: the Persistence and Background namespaces are
+# excluded because they are DB-bound by design and covered by the separate
+# Testcontainers integration suite (integration.yml), which does not feed
+# this badge. An unscoped figure (~46%) misread as poor testing when the
+# uncovered bulk was integration-covered code.
 #
 # SDK version is read from global.json (8.0.400, rollForward: latestFeature).
 # NuGet packages are cached keyed on all .csproj files + global.json so a
@@ -175,6 +181,11 @@ jobs:
       # zero-third-party fallback.  (Verified on 5.5.10: Badges does NOT emit
       # a shields endpoint JSON — only pre-coloured SVGs — hence the compose
       # step below.)
+      # classfilters scope the badge to the unit-testable surface: Persistence
+      # (NpgsqlTelemetryRepository, DbBootstrapper, ...) and Background
+      # (PartitionManager, RetentionHostedService, ...) are DB-bound by design
+      # and covered by the Testcontainers integration suite instead — see the
+      # header comment.
       - name: Generate coverage summary + badge SVG
         run: >
           reportgenerator
@@ -182,6 +193,7 @@ jobs:
           -targetdir:badge-out
           -reporttypes:"Badges;JsonSummary"
           -assemblyfilters:"+Vouchfx.*;-*.Tests;-*.UnitTests;-*.TestSupport"
+          -classfilters:"-Vouchfx.Telemetry.Backend.Persistence.*;-Vouchfx.Telemetry.Backend.Background.*"
 
       # Compose the shields.io endpoint JSON
       # (https://shields.io/badges/endpoint-badge) the README renders via
@@ -195,7 +207,7 @@ jobs:
           [[ "$pct" =~ ^[0-9]+(\.[0-9]+)?$ ]] || { echo "unexpected linecoverage: '$pct'" >&2; exit 1; }
           jq -n --argjson pct "$pct" '{
             schemaVersion: 1,
-            label: "coverage",
+            label: "unit coverage",
             message: "\($pct)%",
             color: (if $pct >= 90 then "brightgreen"
                     elif $pct >= 75 then "green"
