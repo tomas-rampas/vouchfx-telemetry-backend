@@ -2,7 +2,7 @@
 #
 # Fails if any commit in a pull request lacks a "Signed-off-by:" trailer.
 # The DCO trailer is required for all contributions to this repository
-# (see CONTRIBUTING.md and GOVERNANCE.md).
+# (see CONTRIBUTING.md).
 #
 # Authors add the trailer via:
 #   git commit --signoff            # add signoff to the next commit
