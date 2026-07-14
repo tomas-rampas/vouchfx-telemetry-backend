@@ -51,7 +51,7 @@ jobs:
             // DCO 1.1 sign-off pattern: "Signed-off-by: Full Name <email@example.com>"
             // The name and email are deliberately not further validated here —
             // that is a human-review concern, not a mechanical gate.
-            const signoffPattern = /^Signed-off-by:\s+\S+.+<[^>]+@[^>]+>$/m;
+            const signoffPattern = /^Signed-off-by:\s+\S+.+<[^>]+@[^>]+>[ \t]*$/m;
 
             const commits = await github.paginate(
               github.rest.pulls.listCommits,
