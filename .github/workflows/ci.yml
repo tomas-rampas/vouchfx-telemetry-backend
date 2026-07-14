@@ -162,8 +162,13 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
+      # The global-tool shim lands under ~/.dotnet/tools, which is NOT
+      # guaranteed to be on PATH for subsequent steps — append it to
+      # $GITHUB_PATH so the next steps can invoke `reportgenerator` bare.
       - name: Install ReportGenerator
-        run: dotnet tool install --global dotnet-reportgenerator-globaltool --version 5.5.10
+        run: |
+          dotnet tool install --global dotnet-reportgenerator-globaltool --version 5.5.10
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
       # JsonSummary yields Summary.json (machine-readable percentages); Badges
       # yields badge_linecoverage.svg, kept alongside the endpoint JSON as a
