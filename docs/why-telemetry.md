@@ -47,7 +47,7 @@ This command:
 
 **After enabling:** Each time you run `vouchfx run`, the engine collects aggregate counts and metrics and stores them locally. Nothing is sent unless you configure an endpoint (see below).
 
-For full details on the enable command and what vouchfx considers "anonymous, aggregate usage data," see the [engine's telemetry reference](https://tomas-rampas.github.io/vouchfx/docs/telemetry.html).
+For full details on the enable command and what vouchfx considers "anonymous, aggregate usage data," see the [engine's telemetry reference](https://vouchfx.io/telemetry/).
 
 ## How to opt out, forever or per-run
 
@@ -76,7 +76,7 @@ VOUCHFX_NO_TELEMETRY=1 vouchfx run …
 
 This environment variable suppresses telemetry collection for that run only. Your opt-in status remains unchanged for future runs.
 
-For more details, see the [engine's telemetry reference](https://tomas-rampas.github.io/vouchfx/docs/telemetry.html).
+For more details, see the [engine's telemetry reference](https://vouchfx.io/telemetry/).
 
 ## Verify exactly what would be sent — the local outbox
 
@@ -137,7 +137,7 @@ vouchfx run …
 
 **Failure mode:** If the endpoint is unreachable, the token is invalid, or the network is offline, the engine stays silent — telemetry is **never sent over a broken pipe**, and the run completes normally. The local outbox accumulates unsent events; they will be retried on a subsequent run (the engine backs off between failed drain attempts).
 
-For configuration details and troubleshooting, see the [engine's telemetry reference](https://tomas-rampas.github.io/vouchfx/docs/telemetry.html).
+For configuration details and troubleshooting, see the [engine's telemetry reference](https://vouchfx.io/telemetry/).
 
 ## Your right to be forgotten
 

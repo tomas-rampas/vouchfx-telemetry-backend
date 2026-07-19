@@ -126,6 +126,15 @@ PAGE = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>{title} · vouchfx telemetry</title>
 <meta name="description" content="{desc}" />
+<link rel="canonical" href="{canonical}" />
+<meta property="og:type" content="article" />
+<meta property="og:site_name" content="vouchfx telemetry" />
+<meta property="og:title" content="{title}" />
+<meta property="og:description" content="{desc}" />
+<meta property="og:url" content="{canonical}" />
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:title" content="{title}" />
+<meta name="twitter:description" content="{desc}" />
 <meta name="theme-color" content="#0b0f1a" />
 <link rel="icon" href="{root}favicon.svg" type="image/svg+xml" />
 <link rel="stylesheet" href="{root}styles.css" />
@@ -143,7 +152,7 @@ PAGE = """<!DOCTYPE html>
       <a href="{root}index.html">Home</a>
       <a href="{root}docs.html">Docs</a>
       <a href="{root}docs/why-telemetry.html">Why telemetry</a>
-      <a href="https://tomas-rampas.github.io/vouchfx/">Engine docs</a>
+      <a href="https://vouchfx.io/">Engine docs</a>
     </nav>
     <a class="btn btn--ghost nav__gh" href="https://github.com/tomas-rampas/vouchfx-telemetry-backend" target="_blank" rel="noopener noreferrer">GitHub</a>
   </div>
@@ -167,7 +176,16 @@ PORTAL = """<!DOCTYPE html>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Documentation · vouchfx telemetry</title>
-<meta name="description" content="vouchfx telemetry backend documentation — the opt-in overview, the privacy policy, the wire contract, architecture, and how to run or self-host the backend." />
+<meta name="description" content="Documentation for vouchfx telemetry, the self-hosted, privacy-first backend for the end-to-end integration testing framework: opt-in, privacy, self-hosting." />
+<link rel="canonical" href="https://telemetry.vouchfx.io/docs.html" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="vouchfx telemetry" />
+<meta property="og:title" content="Documentation · vouchfx telemetry" />
+<meta property="og:description" content="Documentation for vouchfx telemetry, the self-hosted, privacy-first backend for the end-to-end integration testing framework: opt-in, privacy, self-hosting." />
+<meta property="og:url" content="https://telemetry.vouchfx.io/docs.html" />
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:title" content="Documentation · vouchfx telemetry" />
+<meta name="twitter:description" content="Documentation for vouchfx telemetry, the self-hosted, privacy-first backend for the end-to-end integration testing framework: opt-in, privacy, self-hosting." />
 <meta name="theme-color" content="#0b0f1a" />
 <link rel="icon" href="favicon.svg" type="image/svg+xml" />
 <link rel="stylesheet" href="styles.css" />
@@ -183,7 +201,7 @@ PORTAL = """<!DOCTYPE html>
     <nav class="nav__links" aria-label="Primary">
       <a href="index.html">Home</a>
       <a href="docs/why-telemetry.html">Why telemetry</a>
-      <a href="https://tomas-rampas.github.io/vouchfx/">Engine docs</a>
+      <a href="https://vouchfx.io/">Engine docs</a>
     </nav>
     <a class="btn btn--ghost nav__gh" href="https://github.com/tomas-rampas/vouchfx-telemetry-backend" target="_blank" rel="noopener noreferrer">GitHub</a>
   </div>
@@ -257,15 +275,15 @@ PORTAL = """<!DOCTYPE html>
     <p>This is the server half of a two-repository system, alongside the community provider hub and the sample applications.</p>
     <p class="note">Live: vouchfx engine {{fact:engine_release}} · <code>Vouchfx.Sdk</code> {{fact:sdk_version}} · community providers listed in the hub registry: {{fact:community_provider_count}} (latest: <code>Vouchfx.Community.JsonRpc</code> {{fact:community_jsonrpc_version}}).</p>
     <div class="doc-cards">
-      <a class="doc-card" href="https://tomas-rampas.github.io/vouchfx/" target="_blank" rel="noopener noreferrer">
+      <a class="doc-card" href="https://vouchfx.io/" target="_blank" rel="noopener noreferrer">
         <span class="doc-card__k">ENGINE</span><h3>vouchfx project site</h3>
         <p>The engine that produces the telemetry this service ingests — its telemetry reference (docs/telemetry.html on the engine site) covers the CLI-side <code>vouchfx telemetry enable/disable</code> commands and configuration.</p>
       </a>
-      <a class="doc-card" href="https://tomas-rampas.github.io/vouchfx-providers/" target="_blank" rel="noopener noreferrer">
+      <a class="doc-card" href="https://providers.vouchfx.io/" target="_blank" rel="noopener noreferrer">
         <span class="doc-card__k">HUB</span><h3>vouchfx providers</h3>
         <p>The community hub for vouchfx step providers — unrelated data path, same ecosystem.</p>
       </a>
-      <a class="doc-card" href="https://tomas-rampas.github.io/vouchfx-samples/" target="_blank" rel="noopener noreferrer">
+      <a class="doc-card" href="https://samples.vouchfx.io/" target="_blank" rel="noopener noreferrer">
         <span class="doc-card__k">SAMPLES</span><h3>vouchfx-samples</h3>
         <p>Four production-grade sample applications with complete <code>.e2e.yaml</code> suites — the engine client that would, if you opt in, be the source of the events this service ingests.</p>
       </a>
@@ -282,7 +300,7 @@ PORTAL = """<!DOCTYPE html>
     <div class="footer__links">
       <a href="index.html">Home</a>
       <a href="https://github.com/tomas-rampas/vouchfx-telemetry-backend" target="_blank" rel="noopener noreferrer">Repository</a>
-      <a href="https://tomas-rampas.github.io/vouchfx/" target="_blank" rel="noopener noreferrer">Engine docs</a>
+      <a href="https://vouchfx.io/" target="_blank" rel="noopener noreferrer">Engine docs</a>
       <a href="https://github.com/tomas-rampas/vouchfx-telemetry-backend/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">Licence (Apache-2.0)</a>
     </div>
   </div>
@@ -297,11 +315,15 @@ CONFIG = SiteConfig(
     docs=DOCS,
     page_template=PAGE,
     portal_html=PORTAL,
-    meta_description_prefix="vouchfx telemetry backend documentation",
+    meta_description_prefix=(
+        "Self-hosted, privacy-first telemetry backend for vouchfx — the end-to-end "
+        "integration testing framework"
+    ),
     extra=EXTRA,
     skip=SKIP,
     skip_prefixes=SKIP_PREFIXES,
     delete_facts_fallback=False,
+    site_url="https://telemetry.vouchfx.io/",
 )
 
 
