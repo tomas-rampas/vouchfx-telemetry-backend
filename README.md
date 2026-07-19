@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/tomas-rampas/vouchfx-telemetry-backend/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tomas-rampas/vouchfx-telemetry-backend/actions/workflows/ci.yml?query=branch%3Amain)
 [![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftomas-rampas%2Fvouchfx-telemetry-backend%2Fbadges%2Fcoverage-endpoint.json)](https://github.com/tomas-rampas/vouchfx-telemetry-backend/actions/workflows/ci.yml?query=branch%3Amain)
-[![Docs](https://img.shields.io/badge/docs-GitHub_Pages-blue)](https://tomas-rampas.github.io/vouchfx-telemetry-backend/)
+[![Docs](https://img.shields.io/badge/docs-GitHub_Pages-blue)](https://telemetry.vouchfx.io/)
 [![License](https://img.shields.io/github/license/tomas-rampas/vouchfx-telemetry-backend)](https://github.com/tomas-rampas/vouchfx-telemetry-backend/blob/main/LICENSE)
 
 The server half of [vouchfx](https://github.com/tomas-rampas/vouchfx)'s opt-in, privacy-first telemetry system.
@@ -40,7 +40,7 @@ touch can reach it — there is nowhere to put it.
 - **[Architecture](docs/architecture.md)** — System design, five-component architecture, PostgreSQL schema, Azure topology
 - **[Operations Runbook](docs/operations.md)** — Deployment procedures, configuration reference, troubleshooting, maintenance tasks
 - **[Privacy Policy](docs/privacy.md)** — Data handling, retention, deletion, and compliance considerations
-- **[Engine telemetry reference](https://tomas-rampas.github.io/vouchfx/docs/telemetry.html)** — CLI-side telemetry configuration in the vouchfx engine
+- **[Engine telemetry reference](https://vouchfx.io/telemetry/)** — CLI-side telemetry configuration in the vouchfx engine
 
 ## Endpoints at a Glance
 

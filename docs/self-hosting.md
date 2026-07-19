@@ -315,7 +315,7 @@ vouchfx run …
 
 The engine will collect telemetry during the run and attempt to POST it to your backend. If the endpoint is unreachable or the token is invalid, the engine stays silent (fail-silent guarantee) and the run completes normally; events accumulate in the local outbox and are retried on a subsequent run (the engine backs off between failed drain attempts).
 
-For full details on client-side telemetry configuration, see the [vouchfx engine's telemetry documentation](https://tomas-rampas.github.io/vouchfx/docs/telemetry.html).
+For full details on client-side telemetry configuration, see the [vouchfx engine's telemetry documentation](https://vouchfx.io/telemetry/).
 
 ## What Azure adds (if you use Azure in production)
 

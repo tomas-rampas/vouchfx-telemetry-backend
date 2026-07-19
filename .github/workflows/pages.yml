@@ -69,7 +69,7 @@ jobs:
       - name: Install build dependencies
         run: |
           python -m pip install markdown==3.10.2 pygments==2.20.0 \
-            "vouchfx-site-tools @ git+https://github.com/tomas-rampas/vouchfx.git@4005be21e5b4d75af3d1f3852c066057149eeb1e#subdirectory=scripts/site-tools"  # pinned engine SHA — bump deliberately when site-tools changes
+            "vouchfx-site-tools @ git+https://github.com/tomas-rampas/vouchfx.git@b5c84422998f4e1253aae90aa0762d31a7c0ff0a#subdirectory=scripts/site-tools"  # pinned engine SHA — bump deliberately when site-tools changes
 
       - name: Build site (landing page + rendered docs)
         env:
