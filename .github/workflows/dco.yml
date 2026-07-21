@@ -77,7 +77,14 @@ jobs:
             // The separator after the colon is "[ \t]+", not "\s+", for the
             // same reason: git only ever emits a single-line trailer, so the
             // separator itself must not be able to swallow a line break.
-            const signoffPattern = /^Signed-off-by:[ \t]+\S(?:(?!<).)*<(?:(?![>@]).)+@(?:(?!>).)+>[ \t]*$/m;
+            //
+            // The name segment is "(?:(?!<).)+" (one-or-more), not "*": the
+            // fixed leading "\S" plus a possibly-empty "*" tail would accept
+            // as little as a single character before "<" (e.g. "A<x@y>" or
+            // even "<<a@b>"), which is looser than intended — a real trailer
+            // always has a non-empty name before the bracket. "+" restores a
+            // minimum of two characters before "<", matching the original.
+            const signoffPattern = /^Signed-off-by:[ \t]+\S(?:(?!<).)+<(?:(?![>@]).)+@(?:(?!>).)+>[ \t]*$/m;
 
             const commits = await github.paginate(
               github.rest.pulls.listCommits,
