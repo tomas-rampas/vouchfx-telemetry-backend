@@ -26,10 +26,11 @@
 # SECURITY NOTE — regex denial-of-service prevention
 # ---------------------------------------------------
 # Commit messages are attacker-controlled for the regex engine too, not just
-# the shell. The sign-off pattern is written so no two adjacent quantifiers
-# can trade characters between them, keeping a match attempt linear even
-# against a long, malformed trailer. The job also carries a timeout-minutes,
-# as a defence-in-depth backstop (vouchfx#261).
+# the shell. The sign-off pattern is written so every quantified segment is
+# bounded both by the literal that ends it and by the current line, so a
+# match attempt stays linear even against a long, malformed, or multi-line
+# trailer. The job also carries a timeout-minutes, as a defence-in-depth
+# backstop (vouchfx#261).
 
 name: DCO sign-off check
 
@@ -61,14 +62,22 @@ jobs:
             // The name and email are deliberately not further validated here —
             // that is a human-review concern, not a mechanical gate.
             //
-            // Linear-time by construction: every quantifier here either
-            // stands alone before a required literal, or its character class
-            // explicitly excludes that literal (e.g. [^>@]+ before the "@"
-            // pivot). No two adjacent quantifiers can absorb the same
-            // characters, so a line missing its "<"/"@"/">" cannot cause
-            // backtracking to trade characters between them (the previous
-            // \S+.+ and [^>]+@[^>]+ pairs both could, and were quadratic).
-            const signoffPattern = /^Signed-off-by:\s+\S.+<[^>@]+@[^>]+>[ \t]*$/m;
+            // Linear-time by construction: every quantified segment is
+            // bounded by TWO things at once — the literal that ends it
+            // ("<", "@" or ">") AND the current line. "(?:(?!X).)" matches
+            // whatever "." matches (which already excludes LF/CR and the
+            // Unicode line/paragraph separators) provided it is also not X —
+            // so it can never run past the pivot literal, and never past a
+            // line break either. That closes two distinct amplification
+            // routes a plain "[^X]+" character class would still leave open:
+            //   - retrying many "<"/"@"/">" candidates on one long line
+            //     (each retry re-scanning the rest of the line), and
+            //   - scanning past a newline into the rest of the message, when
+            //     many anchor lines each start their own expensive scan.
+            // The separator after the colon is "[ \t]+", not "\s+", for the
+            // same reason: git only ever emits a single-line trailer, so the
+            // separator itself must not be able to swallow a line break.
+            const signoffPattern = /^Signed-off-by:[ \t]+\S(?:(?!<).)*<(?:(?![>@]).)+@(?:(?!>).)+>[ \t]*$/m;
 
             const commits = await github.paginate(
               github.rest.pulls.listCommits,
