@@ -79,7 +79,11 @@ _bootstrap_site_tools()
 
 from vouchfx_site_tools import SiteConfig, build  # noqa: E402
 
-# Markdown files to render, in sidebar order. (source path relative to ROOT, nav group, label)
+# Markdown files to render, in sidebar order. Each entry is a tuple of
+# (source path relative to ROOT, nav group, label) with an OPTIONAL 4th
+# element — a one-line description used only by llms.txt (see the comment
+# immediately below); entries without it fall back to a generic
+# "{meta_description_prefix} — {label}" description.
 #
 # SUPERSET INVARIANT: every source path listed here (and everything under
 # docs/**/*.md, picked up automatically) must fall under one of the `paths:`
