@@ -176,7 +176,7 @@ PAGE = """<!DOCTYPE html>
     <div class="doc-breadcrumb"><a href="{root}docs.html">Documentation</a> / {crumb}</div>
     <article class="prose">{body}</article>
   </main>
-  <nav class="doc-toc"><h4>On this page</h4>{toc}</nav>
+  <nav class="doc-toc"><p class="doc-toc__label">On this page</p>{toc}</nav>
 </div>
 {mermaid_script}
 </body>
