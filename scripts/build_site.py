@@ -87,24 +87,37 @@ from vouchfx_site_tools import SiteConfig, build  # noqa: E402
 # trigger a rebuild. docs/** and the four root project documents already
 # cover every entry below; if a new top-level doc is ever added outside those
 # globs, the workflow's path list must grow to match.
-DOCS: list[tuple[str, str, str]] = [
+DOCS: list[tuple[str, str, str, str]] = [
     # For users: the opt-in story and the privacy guarantees, in reading order.
-    ("docs/why-telemetry.md", "For users", "Why telemetry, and how to opt in"),
-    ("docs/privacy.md", "For users", "Privacy policy & data handling"),
+    # The 4th element is llms.txt's per-page description (vouchfx_site_tools'
+    # OPTIONAL 4th SiteConfig.docs element) — reused verbatim from this same
+    # file's PORTAL doc-card copy below, not newly written prose.
+    ("docs/why-telemetry.md", "For users", "Why telemetry, and how to opt in",
+     "What is (and is never) collected, how to enable/disable, the local outbox, and the fail-silent guarantee."),
+    ("docs/privacy.md", "For users", "Privacy policy & data handling",
+     "The authoritative home of the 90-day retention window and the 30-day deletion commitment."),
 
     # Reference: the frozen wire contract and the system design behind it.
-    ("docs/wire-contract.md", "Reference", "Wire contract"),
-    ("docs/architecture.md", "Reference", "Architecture & system design"),
+    ("docs/wire-contract.md", "Reference", "Wire contract",
+     "The /v1/telemetry and /v1/telemetry/forget endpoints, the allowlisted TelemetryEvent schema, dedup and rate limiting."),
+    ("docs/architecture.md", "Reference", "Architecture & system design",
+     "The five-component service, the partitioned PostgreSQL schema, and the Azure infrastructure topology."),
 
     # Operating: running a backend, on Azure or anywhere else.
-    ("docs/operations.md", "Operating", "Operations runbook (Azure pilot)"),
-    ("docs/self-hosting.md", "Operating", "Self-hosting without Azure"),
+    ("docs/operations.md", "Operating", "Operations runbook (Azure pilot)",
+     "Deployment via Bicep, GitHub Actions secrets, configuration reference, monitoring, and troubleshooting."),
+    ("docs/self-hosting.md", "Operating", "Self-hosting without Azure",
+     "Docker, Docker Compose, and Kubernetes examples — bring your own PostgreSQL 16 and point the engine at it."),
 
     # Project
-    ("README.md", "Project", "Repository README"),
-    ("CONTRIBUTING.md", "Project", "Contributing"),
-    ("SECURITY.md", "Project", "Security policy"),
-    ("CODE_OF_CONDUCT.md", "Project", "Code of conduct"),
+    ("README.md", "Project", "Repository README",
+     "What the backend is, the repository layout, and the local build & test commands."),
+    ("CONTRIBUTING.md", "Project", "Contributing",
+     "Where discussion belongs, the quality bar, and the two load-bearing contracts that change only deliberately."),
+    ("SECURITY.md", "Project", "Security policy",
+     "How to report a suspected vulnerability — always via private reporting, never a public issue."),
+    ("CODE_OF_CONDUCT.md", "Project", "Code of conduct",
+     "The standards this community holds itself to."),
 ]
 
 # Any additional markdown that is link-reachable but not in the sidebar.
@@ -324,6 +337,11 @@ CONFIG = SiteConfig(
     skip_prefixes=SKIP_PREFIXES,
     delete_facts_fallback=False,
     site_url="https://telemetry.vouchfx.io/",
+    semantic_headings=True,
+    llms_summary=(
+        "Self-hosted, privacy-first telemetry backend for vouchfx — the end-to-end integration "
+        "testing framework. Opt-in, allowlist-only, deletable on request."
+    ),
 )
 
 
