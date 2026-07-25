@@ -35,14 +35,14 @@
 /* ---- Rendered doc layout ---- */
 .doc-shell { max-width: 1240px; margin: 0 auto; padding: 0 24px; display: grid; grid-template-columns: 240px minmax(0, 1fr) 220px; gap: 40px; }
 .doc-side { position: sticky; top: 72px; align-self: start; max-height: calc(100vh - 96px); overflow-y: auto; padding: 28px 0; }
-.doc-side h4 { font-size: .7rem; text-transform: uppercase; letter-spacing: .14em; color: var(--muted-2); margin: 18px 0 8px; }
-.doc-side h4:first-child { margin-top: 0; }
+.doc-side .doc-side__group { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .14em; color: var(--muted-2); margin: 18px 0 8px; }
+.doc-side .doc-side__group:first-child { margin-top: 0; }
 .doc-side a { display: block; padding: 5px 10px; border-radius: 7px; font-size: .87rem; color: var(--muted); border-left: 2px solid transparent; }
 .doc-side a:hover { color: var(--text); background: rgba(255,255,255,.03); }
 .doc-side a.active { color: var(--text); border-left-color: var(--violet); background: rgba(129,140,248,.08); }
 
 .doc-toc { position: sticky; top: 72px; align-self: start; max-height: calc(100vh - 96px); overflow-y: auto; padding: 28px 0; font-size: .84rem; }
-.doc-toc h4 { font-size: .7rem; text-transform: uppercase; letter-spacing: .14em; color: var(--muted-2); margin: 0 0 10px; }
+.doc-toc .doc-toc__label { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .14em; color: var(--muted-2); margin: 0 0 10px; }
 .doc-toc ul { list-style: none; margin: 0; padding: 0; }
 .doc-toc li { margin: 0; }
 .doc-toc a { display: block; padding: 4px 0 4px 12px; color: var(--muted-2); border-left: 2px solid var(--border); line-height: 1.4; }
@@ -57,12 +57,32 @@
 .doc-breadcrumb a:hover { color: var(--text); }
 .prose { color: #cdd4e4; line-height: 1.72; font-size: 1rem; }
 .prose > :first-child { margin-top: 0; }
-.prose h1 { font-size: 2rem; line-height: 1.2; letter-spacing: -.02em; color: var(--text); margin: 0 0 8px; }
-.prose h2 { font-size: 1.5rem; letter-spacing: -.01em; color: var(--text); margin: 2.2em 0 .6em; padding-top: .4em; border-top: 1px solid var(--border); }
-.prose h3 { font-size: 1.2rem; color: var(--text); margin: 1.8em 0 .5em; }
-.prose h4 { font-size: 1.02rem; color: var(--text); margin: 1.5em 0 .5em; }
-.prose h2 a.headerlink, .prose h3 a.headerlink { opacity: 0; margin-left: 8px; color: var(--violet); text-decoration: none; font-weight: 400; }
-.prose h2:hover a.headerlink, .prose h3:hover a.headerlink { opacity: 1; }
+/* semantic_headings=True (vouchfx-site-tools) renders a source Markdown page's
+   own headings starting at a real <h1> (baselevel=1) instead of <h2>
+   (baselevel=2) — every rendered heading tag is one level shallower than
+   before, so these selectors are renumbered down by one (h2->h1, h3->h2,
+   h4->h3, declarations unchanged verbatim) to keep the rendered appearance
+   pixel-for-pixel identical. The pre-existing `.prose h1` rule is dropped:
+   it was dead code under the old baselevel=2 default (no source heading
+   ever rendered as a literal h1), and there is nothing shallower than h1 to
+   map it to now.
+
+   A source #### (4th-level) heading used to render as h5 — with no dedicated
+   `.prose h5` rule, it fell back to the browser UA default for h5
+   (font-size: .83em; margin: 1.67em 0). It now renders as a literal h4
+   instead, and the UA defaults for h4 and h5 are NOT the same (h4:
+   font-size 1em/margin 1.33em vs h5: .83em/1.67em) — "no dedicated rule
+   either way" is therefore NOT the same appearance, and this shipped as a
+   live regression on the 30 published #### headings in docs/architecture.md
+   and docs/wire-contract.md, each rendering ~20% larger (UA h4 16px vs the
+   previous UA h5 13.28px, 16px base). The explicit `.prose h4` rule below
+   pins the old UA h5 metrics so those headings keep their pre-bump size. */
+.prose h1 { font-size: 1.5rem; letter-spacing: -.01em; color: var(--text); margin: 2.2em 0 .6em; padding-top: .4em; border-top: 1px solid var(--border); }
+.prose h2 { font-size: 1.2rem; color: var(--text); margin: 1.8em 0 .5em; }
+.prose h3 { font-size: 1.02rem; color: var(--text); margin: 1.5em 0 .5em; }
+.prose h4 { font-size: .83em; margin: 1.67em 0; }
+.prose h1 a.headerlink, .prose h2 a.headerlink { opacity: 0; margin-left: 8px; color: var(--violet); text-decoration: none; font-weight: 400; }
+.prose h1:hover a.headerlink, .prose h2:hover a.headerlink { opacity: 1; }
 .prose p { margin: 0 0 1.1em; }
 .prose a { color: #8fb6ff; text-decoration: none; border-bottom: 1px solid rgba(143,182,255,.3); }
 .prose a:hover { border-bottom-color: #8fb6ff; }
