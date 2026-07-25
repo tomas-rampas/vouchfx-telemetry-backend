@@ -51,7 +51,7 @@ jobs:
       # Cache NuGet packages.  The key is based on the OS, all .csproj files,
       # and global.json so a new dependency or SDK pin busts the cache.
       - name: Cache NuGet packages
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json') }}
