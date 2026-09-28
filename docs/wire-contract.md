@@ -55,7 +55,7 @@ The service may accept the batch in its entirety, or may silently skip individua
 
 | Status | Reason | Client Action |
 |--------|--------|---------------|
-| **400** | Request validation failed | Do not retry. Likely causes: missing/invalid `Idempotency-Key`, empty body, malformed JSON, unknown event field (schema version 1 only), event timestamp too far in the future (>2 days ahead). The server logs the parse error but does not return it to the caller. |
+| **400** | Request validation failed | Do not retry. Likely causes: missing/invalid `Idempotency-Key`, empty body, malformed JSON, unknown event field (schema versions 1 and 2), a schema-version-1 line carrying `skippedEventLines`, a schema-version-2 line missing `skippedEventLines`, event timestamp too far in the future (>2 days ahead). The server logs the parse error but does not return it to the caller. |
 | **401** | Authentication failed | Do not retry. The `Authorization` header is missing or the token is not on the configured allowlist. Store the token securely and retry only after reconfiguring. |
 | **413** | Payload too large | Do not retry until the client batches more carefully. Caused by: request body exceeds `VOUCHFX_TELEMETRY_MAX_BODY_BYTES` (default 2 MiB), or NDJSON line count exceeds `VOUCHFX_TELEMETRY_MAX_BATCH_LINES` (default 500). |
 | **415** | Unsupported media type | Do not retry. The `Content-Type` header is missing or not `application/x-ndjson`. |
@@ -69,11 +69,11 @@ The service may accept the batch in its entirety, or may silently skip individua
 
 ### TelemetryEvent Schema
 
-The allowlist contract (frozen for v1.x). A `TelemetryEvent` is a JSON object with these required fields:
+The allowlist contract (frozen for v1.x; extended additively at schema version 2 by `skippedEventLines`, issue #30). A `TelemetryEvent` is a JSON object; every field below is required at every schema version this backend knows, except `skippedEventLines`, whose presence is itself version-dependent (see its row):
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `schemaVersion` | `int` | The telemetry schema version. `v1` is strict (unknown fields rejected). `v>1` is lenient for forward-compatibility (unknown fields tolerated but never stored, because the typed allowlist prevents them from binding to a C# property). |
+| `schemaVersion` | `int` | The telemetry schema version. `v1`–`v2` (the versions this backend knows) are strict (unknown fields rejected). Above `v2` is lenient for forward-compatibility (unknown fields tolerated but never stored, because the typed allowlist prevents them from binding to a C# property). |
 | `timestamp` | `ISO8601 DateTimeOffset` | UTC timestamp at which the telemetry batch was built (the end of the vouchfx run). Must not be >2 days in the future. |
 | `installId` | `GUID` | An opaque, randomly-generated identifier unique to this vouchfx installation (minted at opt-in, deleted on `telemetry disable`). This is the only row-level identifier; it does not identify the user, machine, or any test content. |
 | `toolVersion` | `string` | Informational version of the vouchfx CLI, e.g. `"1.0.0"`. |
@@ -85,8 +85,9 @@ The allowlist contract (frozen for v1.x). A `TelemetryEvent` is a JSON object wi
 | `scenarioVerdicts` | `TelemetryVerdictCounts` | Per-verdict scenario counts across the run (structure below). |
 | `stepFamilies` | `object` | JSON object: step counts keyed by family (intent: `"http"`, `"db-assert"`, `"mq-publish"`, etc.). Keys are drawn only from the frozen built-in Core family taxonomy; any custom/non-Core provider step is counted under the `"custom"` bucket. Example: `{"http":3,"db-assert":1}` |
 | `stepProviders` | `object` | JSON object: step counts keyed by family.provider (technology: `"http.rest"`, `"db-assert.postgres"`, etc.). Keys are drawn only from the frozen built-in Core provider taxonomy; custom steps are counted under `"custom"`. Example: `{"http.rest":3,"db-assert.postgres":1}` |
-| `startupMs` | `long` | Wall-clock milliseconds from run start to first scenario start (topology + engine startup). |
-| `timeToFirstTestMs` | `long` | Wall-clock milliseconds from run start to first step completion (time-to-first-test). |
+| `startupMs` | `long` | Wall-clock milliseconds from the run starting to the first scenario starting (for a scenario that runs, that includes topology and engine startup — a scenario refused before it ran instead stamps its scenario-started at refusal time, possibly before any topology comes up). A non-identifying duration. |
+| `timeToFirstTestMs` | `long` | Wall-clock milliseconds from the run starting to the earliest step-completed line in the archived event stream (time-to-first-test). The archive is reconstructed after each scenario's script returns and stamps every step line with that one shared batch timestamp, so this spans the whole first scenario's steps rather than its first step alone. A non-identifying duration. |
+| `skippedEventLines` | `int` | The number of event-stream lines the engine's telemetry builder could not read while building this event. A non-identifying count: how many lines, never which line or what it contained. Introduced at `schemaVersion` 2 (issue #30): **required** at schema version 2 (a version-2 line without it is refused with 400), **absent** at schema version 1 (a version-1 line carrying it is refused with 400), and read as `0` when absent at any schema version above 2 (lenient mode). |
 
 #### TelemetryVerdictCounts Structure
 
@@ -101,11 +102,11 @@ Used for both `stepVerdicts` and `scenarioVerdicts`:
 
 ### Schema Versioning
 
-- **Schema version 1:** Strict mode. During deserialization, any JSON property not declared on the `TelemetryEvent` record is rejected with a 400 error. This is a defence-in-depth check: the engine's allowlist enforcement on the client side is the primary guard; the backend's strict parsing is the secondary guard to detect any bypass.
+- **Schema versions 1–2 (the versions this backend knows — `AllowlistParser.HighestKnownSchemaVersion`):** Strict mode. During deserialization, any JSON property not declared on the `TelemetryEvent` record is rejected with a 400 error. This is a defence-in-depth check: the engine's allowlist enforcement on the client side is the primary guard; the backend's strict parsing is the secondary guard to detect any bypass. `skippedEventLines` exists on the DTO only from schema version 2 onward (issue #30); a schema version 1 line carrying it is refused by an explicit check in `AllowlistParser`, because strict mode alone can no longer tell it apart from a genuinely known field once the DTO declares the member. Symmetrically, a schema version 2 line that omits `skippedEventLines` is refused too — the field is required starting at the version it is introduced at, and that presence check runs before the unknown-field check.
 
-- **Schema version >1:** Lenient mode. Unknown properties are tolerated but never stored. This permits a future engine release to add new metrics without breaking the backend. Because the `TelemetryEvent` record is an allowlist (only declared properties can bind), unknown fields have nowhere to live in the CLR and are automatically discarded during deserialization.
+- **Schema versions above 2:** Lenient mode. Unknown properties are tolerated but never stored. This permits a future engine release to add new metrics without breaking the backend. Because the `TelemetryEvent` record is an allowlist (only declared properties can bind), unknown fields have nowhere to live in the CLR and are automatically discarded during deserialization.
 
-The backend treats both as 200 OK and ingests the event. An at-least-once client emitting a schema version from a newer engine is never rejected forever.
+A valid event at any of these versions — one that satisfies its version's field requirements — is accepted with 200 OK and ingested. An at-least-once client emitting a schema version from a newer engine is never rejected forever.
 
 ## Endpoint: POST /v1/telemetry/forget
 

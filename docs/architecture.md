@@ -36,8 +36,9 @@ The backend is a lean, stateless **ASP.NET Core 8 minimal-API service** that:
 **Logic:**
 - Iterates each NDJSON line
 - Extracts `schemaVersion` field; treats missing/non-integer as parse error
-- Schema version 1: strict deserialization (rejects unknown fields via `UnmappedMemberHandling.Disallow`)
-- Schema version >1: lenient deserialization (unknown fields tolerated but never stored)
+- Schema versions 1–2 (`AllowlistParser.HighestKnownSchemaVersion` is 2, the highest version this backend knows): strict deserialization (rejects unknown fields via `UnmappedMemberHandling.Disallow`)
+- Schema versions above 2: lenient deserialization (unknown fields tolerated but never stored)
+- `skippedEventLines` exists on `TelemetryEvent` only from schema version 2 onward (issue #30); a schema version 1 line carrying it is refused via an explicit check, since the DTO now declares the member and strict mode alone can no longer treat it as unknown at version 1. Symmetrically, a schema version 2 line that omits `skippedEventLines` is also refused — the field is required from the version it is introduced at, checked before the unknown-field check runs
 - Returns a `ParseResult` (union type): `Empty`, `TooManyLines`, `Bad`, or `Ok`
 - The `TelemetryEvent` record is the allowlist; only its declared properties can bind
 
@@ -140,6 +141,9 @@ CREATE TABLE telemetry_event (
     -- Timings (milliseconds)
     startup_ms              bigint      NOT NULL,
     time_to_first_test_ms   bigint      NOT NULL,
+    -- Event-stream lines the engine's telemetry builder could not read
+    -- (schemaVersion 2+ only; defaults to 0 for schemaVersion 1)
+    skipped_event_lines     integer     NOT NULL DEFAULT 0,
     
     PRIMARY KEY (install_id, event_timestamp, schema_version)
 )

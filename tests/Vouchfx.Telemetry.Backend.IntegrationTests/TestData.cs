@@ -18,7 +18,8 @@ internal static class TestData
     public static TelemetryEvent MakeEvent(
         Guid? installId = null,
         DateTimeOffset? timestamp = null,
-        int schemaVersion = 1) => new()
+        int schemaVersion = 1,
+        int skippedEventLines = 0) => new()
         {
             SchemaVersion = schemaVersion,
             Timestamp = timestamp ?? DateTimeOffset.UtcNow,
@@ -34,6 +35,7 @@ internal static class TestData
             StepProviders = new Dictionary<string, int> { ["http.rest"] = 1 },
             StartupMs = 100L,
             TimeToFirstTestMs = 200L,
+            SkippedEventLines = skippedEventLines,
         };
 
     /// <summary>Returns a random 64-character lowercase hex idempotency key.</summary>

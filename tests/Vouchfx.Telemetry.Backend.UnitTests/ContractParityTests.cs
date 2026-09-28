@@ -60,6 +60,44 @@ public sealed class ContractParityTests
     }
 
     [Fact]
+    public void DeserializeEventLineV2MatchesExpectedSkippedEventLines()
+    {
+        var json = File.ReadAllText(FixturePath("event-line-v2.json"), new UTF8Encoding(false));
+        var evt = JsonSerializer.Deserialize<TelemetryEvent>(json);
+
+        Assert.NotNull(evt);
+        Assert.Equal(2, evt.SchemaVersion);
+        Assert.Equal(3, evt.SkippedEventLines);
+    }
+
+    [Fact]
+    public void RoundTripEventLineV2ProducesIdenticalBytes()
+    {
+        var original = File.ReadAllText(FixturePath("event-line-v2.json"), new UTF8Encoding(false)).TrimEnd('\n');
+        var evt = JsonSerializer.Deserialize<TelemetryEvent>(original);
+        Assert.NotNull(evt);
+
+        var reserialized = JsonSerializer.Serialize(evt, RoundTripOptions);
+
+        Assert.Equal(original, reserialized);
+    }
+
+    [Fact]
+    public void RoundTripEventLineV2ZeroSkippedEventLinesProducesIdenticalBytes()
+    {
+        // skippedEventLines:0 is the common case on real runs (most runs skip nothing);
+        // this pins that the zero count round-trips byte-identically too, not just a
+        // non-zero one — the engine always writes the field, including 0.
+        var original = File.ReadAllText(FixturePath("event-line-v2-zero.json"), new UTF8Encoding(false)).TrimEnd('\n');
+        var evt = JsonSerializer.Deserialize<TelemetryEvent>(original);
+        Assert.NotNull(evt);
+
+        var reserialized = JsonSerializer.Serialize(evt, RoundTripOptions);
+
+        Assert.Equal(original, reserialized);
+    }
+
+    [Fact]
     public void IdempotencyKeyBatchSingleMatchesExpected()
     {
         var keys = ParseExpectedKeys();
@@ -84,15 +122,20 @@ public sealed class ContractParityTests
     }
 
     [Fact]
-    public void RoundTripEventLineProducesIdenticalBytes()
+    public void RoundTripEventLineV1AppendsSkippedEventLinesZero()
     {
+        // The DTO now models schemaVersion 2, and the engine always writes
+        // skippedEventLines (0 included) — so re-serializing the v1 fixture is NOT
+        // byte-identical to its source: it reproduces the v1 bytes with
+        // ,"skippedEventLines":0 inserted before the closing brace.
         var original = File.ReadAllText(FixturePath("event-line.json"), new UTF8Encoding(false)).TrimEnd('\n');
         var evt = JsonSerializer.Deserialize<TelemetryEvent>(original);
         Assert.NotNull(evt);
 
+        var expected = original[..^1] + ",\"skippedEventLines\":0}";
         var reserialized = JsonSerializer.Serialize(evt, RoundTripOptions);
 
-        Assert.Equal(original, reserialized);
+        Assert.Equal(expected, reserialized);
     }
 
     // Split raw NDJSON text on '\n', dropping a trailing empty entry produced by a

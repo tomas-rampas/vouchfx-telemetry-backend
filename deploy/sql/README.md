@@ -86,7 +86,8 @@ INSERT INTO telemetry_event (
     step_families,
     step_providers,
     startup_ms,
-    time_to_first_test_ms
+    time_to_first_test_ms,
+    skipped_event_lines
 )
 SELECT
     unnest($1::uuid[]),
@@ -108,7 +109,8 @@ SELECT
     unnest($17::jsonb[]),
     unnest($18::jsonb[]),
     unnest($19::bigint[]),
-    unnest($20::bigint[])
+    unnest($20::bigint[]),
+    unnest($21::int[])
 ON CONFLICT (install_id, event_timestamp, schema_version) DO NOTHING;
 
 -- $1  : Guid[]       install_id
@@ -131,6 +133,7 @@ ON CONFLICT (install_id, event_timestamp, schema_version) DO NOTHING;
 -- $18 : string[]     step_providers   (JSON-serialised; cast to jsonb[])
 -- $19 : long[]       startup_ms
 -- $20 : long[]       time_to_first_test_ms
+-- $21 : int[]        skipped_event_lines  (schemaVersion 2+ only; 0 for schemaVersion 1)
 ```
 
 ### Npgsql array binding notes
@@ -141,9 +144,13 @@ ON CONFLICT (install_id, event_timestamp, schema_version) DO NOTHING;
 - For `$17` and `$18`, serialise each `Dictionary<string,int>` to a JSON string
   in C# (`System.Text.Json.JsonSerializer.Serialize`) before building the
   `string[]`; set `DataTypeName = "jsonb[]"`.
-- All arrays must be the same length; the `unnest` parallel-unnest behaviour
-  (multiple `unnest` calls in the same SELECT list) is guaranteed in PostgreSQL
-  9.4+ to expand in lock-step when lengths match, and raises an error on mismatch.
+- All arrays must be the same length. Multiple `unnest` calls in the same
+  SELECT list expand in lock-step when lengths match (guaranteed since
+  PostgreSQL 9.4). On a length mismatch, PostgreSQL 10+ does **not** raise an
+  error — it pads the shorter array(s) with `NULL` to match the longest
+  (measured on PostgreSQL 16.14). The `NOT NULL` columns on `telemetry_event`
+  catch a mismatch instead: the `INSERT` fails with a not-null violation
+  rather than silently padding data.
 
 ### ON CONFLICT behaviour
 

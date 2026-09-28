@@ -1,10 +1,21 @@
 // Vouchfx.Telemetry.Backend — TelemetryEvent contract DTO.
 //
-// Copied verbatim from Vouchfx.Engine.Telemetry/TelemetryEvent.cs (engine PR #155, issue #152).
+// Copied verbatim from Vouchfx.Engine.Telemetry/TelemetryEvent.cs (engine PR #155, issue #152;
+// SkippedEventLines added for engine issue #588 / backend issue #30).
 // Namespace changed from Vouchfx.Engine.Telemetry → Vouchfx.Telemetry.Backend.Contracts.
 // Byte-compatible with the engine's wire format; proven by ContractParityTests.
 // DO NOT modify property names, types, [JsonPropertyName] values, required modifiers, or
 // property order — any change breaks the wire contract and the golden-fixture parity test.
+//
+// ONE DELIBERATE DIFFERENCE from the engine's record: SkippedEventLines is `required` on the
+// engine (every engine that emits schemaVersion 2 always populates it), but plain (not
+// `required`) here. This DTO also binds schemaVersion 1 lines, which pre-date this field
+// entirely (it did not exist before schemaVersion 2) and never carry it — a C# `required`
+// member would fail every schemaVersion 1 line's deserialisation. The optionality is a
+// DTO-level accommodation only, driven by version 1's absence, not a relaxation of version 2:
+// AllowlistParser's field-to-introduced-version table (FieldIntroducedAtVersion) requires
+// the field's presence at schemaVersion 2 exactly as strictly as the engine's `required`
+// keyword does — a schemaVersion 2 line missing it is refused, never defaulted.
 
 using System.Text.Json.Serialization;
 
@@ -123,15 +134,31 @@ public sealed record TelemetryEvent
 
     /// <summary>
     /// Wall-clock milliseconds from the run starting to the first scenario starting
-    /// (topology + engine startup).  A non-identifying duration.
+    /// (for a scenario that runs, that includes topology and engine startup — a
+    /// scenario refused before it ran instead stamps its scenario-started at refusal
+    /// time, possibly before any topology comes up).  A non-identifying duration.
     /// </summary>
     [JsonPropertyName("startupMs")]
     public required long StartupMs { get; init; }
 
     /// <summary>
-    /// Wall-clock milliseconds from the run starting to the first step completing
-    /// (time-to-first-test).  A non-identifying duration.
+    /// Wall-clock milliseconds from the run starting to the earliest step-completed
+    /// line in the archived event stream (time-to-first-test).  The archive is
+    /// reconstructed after each scenario's script returns and stamps every step line
+    /// with that one shared batch timestamp, so this spans the whole first scenario's
+    /// steps rather than its first step alone.  A non-identifying duration.
     /// </summary>
     [JsonPropertyName("timeToFirstTestMs")]
     public required long TimeToFirstTestMs { get; init; }
+
+    /// <summary>
+    /// The number of event-stream lines <c>TelemetryEventBuilder</c> could not
+    /// read while building this event — an envelope that failed to parse, or a typed
+    /// read (scenario-started/scenario-completed/step-started/step-completed) the
+    /// builder's own tolerance guard refused.  Counted once per line (issue #588).  A
+    /// non-identifying count: it says HOW MANY lines were unreadable, never which line
+    /// or what it contained.
+    /// </summary>
+    [JsonPropertyName("skippedEventLines")]
+    public int SkippedEventLines { get; init; }
 }

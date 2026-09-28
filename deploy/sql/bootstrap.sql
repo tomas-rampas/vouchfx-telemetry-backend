@@ -35,9 +35,13 @@
 -- IDEMPOTENCY
 --   This script is fully re-runnable on an existing database:
 --   CREATE TABLE IF NOT EXISTS, CREATE INDEX IF NOT EXISTS,
---   CREATE OR REPLACE FUNCTION, CREATE OR REPLACE VIEW.
---   Running it a second time produces no error and leaves the
---   schema unchanged.
+--   CREATE OR REPLACE FUNCTION, CREATE OR REPLACE VIEW, and (§1a)
+--   a catalog-guarded `DO $guard$` block that checks pg_attribute
+--   before running an ADD COLUMN, so a schema-evolution step is
+--   idempotent WITHOUT re-attempting the ALTER (and its ACCESS
+--   EXCLUSIVE lock) once the column already exists.  Running this
+--   script a second time produces no error and leaves the schema
+--   unchanged.
 -- ============================================================
 
 
@@ -76,6 +80,10 @@ CREATE TABLE IF NOT EXISTS telemetry_event (
     -- timing in milliseconds
     startup_ms              bigint      NOT NULL,
     time_to_first_test_ms   bigint      NOT NULL,
+    -- count of event-stream lines the engine's telemetry builder could not read
+    -- (schemaVersion 2+ only; a schemaVersion 1 event never carries it, hence the
+    -- DEFAULT 0 — see docs/wire-contract.md and issue #30)
+    skipped_event_lines     integer     NOT NULL DEFAULT 0,
 
     -- Natural dedup key.
     -- event_timestamp is included because Postgres requires the
@@ -93,6 +101,45 @@ PARTITION BY RANGE (event_timestamp);
 -- purge run.
 CREATE TABLE IF NOT EXISTS telemetry_event_default
     PARTITION OF telemetry_event DEFAULT;
+
+
+-- ------------------------------------------------------------
+-- 1a. SCHEMA EVOLUTION — skipped_event_lines (issue #30)
+--
+--     CREATE TABLE IF NOT EXISTS above is a no-op on a database
+--     that already has telemetry_event, so it does not add a
+--     column introduced after the table first existed.  This
+--     block is the idempotent upgrade path for such a
+--     deployment; on a brand-new database the column already
+--     exists (declared in the CREATE TABLE above) and the guard
+--     condition is false, so the block is a no-op.
+--
+--     CATALOG-GUARDED, not `ALTER TABLE ... ADD COLUMN IF NOT
+--     EXISTS`: an unconditional ADD COLUMN IF NOT EXISTS still
+--     takes an ACCESS EXCLUSIVE lock on telemetry_event to check
+--     and no-op, on EVERY start, even once the column exists —
+--     and DbBootstrapper resets lock_timeout to DEFAULT before
+--     running this script, so a long reader during a restart
+--     would stall ingestion indefinitely.  Guarding the ALTER
+--     behind a pg_attribute check means a warm start (the
+--     column already there) takes only ACCESS SHARE to read the
+--     catalog and never attempts the ALTER at all.
+--
+--     ALTER TABLE ADD COLUMN on a partitioned parent propagates
+--     to every existing child partition automatically (and every
+--     future partition inherits the parent's full column set at
+--     creation time via ensure_partition), so no per-partition
+--     statement is needed here.
+-- ------------------------------------------------------------
+DO $guard$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_attribute
+                   WHERE attrelid = 'telemetry_event'::regclass
+                     AND attname = 'skipped_event_lines' AND NOT attisdropped) THEN
+        ALTER TABLE telemetry_event ADD COLUMN skipped_event_lines integer NOT NULL DEFAULT 0;
+    END IF;
+END
+$guard$;
 
 
 -- ============================================================

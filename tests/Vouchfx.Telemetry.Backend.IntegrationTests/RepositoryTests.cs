@@ -78,6 +78,33 @@ public sealed class RepositoryTests(PostgresFixture fixture)
         Assert.Equal(1L, await CountEventRowsAsync(installId));
     }
 
+    // ── skipped_event_lines column (issue #30) ───────────────────────────────
+
+    /// <summary>
+    /// Pins that <c>skipped_event_lines</c> — the $21 unnest parameter — lands in the
+    /// right column: a transposed column or parameter in the bulk insert would still
+    /// insert successfully, so only reading the value back by key catches it.
+    /// </summary>
+    [Fact]
+    public async Task IngestAsync_SkippedEventLines_RoundTripsThroughItsOwnColumn()
+    {
+        var repo = CreateRepo();
+        var installIdWithSkips = Guid.NewGuid();
+        var installIdNoSkips = Guid.NewGuid();
+        var events = new[]
+        {
+            TestData.MakeEvent(installId: installIdWithSkips, schemaVersion: 2, skippedEventLines: 7),
+            TestData.MakeEvent(installId: installIdNoSkips, schemaVersion: 2, skippedEventLines: 0),
+        };
+        var key = TestData.MakeIdempotencyKey();
+
+        var newRows = await repo.IngestAsync(events, key, CancellationToken.None);
+
+        Assert.Equal(2, newRows);
+        Assert.Equal(7, await GetSkippedEventLinesAsync(installIdWithSkips));
+        Assert.Equal(0, await GetSkippedEventLinesAsync(installIdNoSkips));
+    }
+
     // ── IsReadyAsync ──────────────────────────────────────────────────────────
 
     /// <summary>Against a live database the repository must report ready.</summary>
@@ -160,6 +187,15 @@ public sealed class RepositoryTests(PostgresFixture fixture)
             "SELECT COUNT(*) FROM ingest_batch WHERE install_id = $1", conn);
         cmd.Parameters.Add(new NpgsqlParameter { Value = installId, DataTypeName = "uuid" });
         return (long)(await cmd.ExecuteScalarAsync())!;
+    }
+
+    private async Task<int> GetSkippedEventLinesAsync(Guid installId)
+    {
+        await using var conn = await fixture.DataSource.OpenConnectionAsync();
+        await using var cmd = new NpgsqlCommand(
+            "SELECT skipped_event_lines FROM telemetry_event WHERE install_id = $1", conn);
+        cmd.Parameters.Add(new NpgsqlParameter { Value = installId, DataTypeName = "uuid" });
+        return (int)(await cmd.ExecuteScalarAsync())!;
     }
 
     private async Task<bool> ForgetProcessedAsync(Guid installId)

@@ -78,7 +78,7 @@ operate your own instance, track `main`.
 Security issues in the parts of this repository the project maintains:
 
 - **The ingest service** itself: `POST /v1/telemetry` (Bearer-token authentication,
-  NDJSON parsing, strict v1 schema validation, batch/event deduplication) and the
+  NDJSON parsing, strict v1–v2 schema validation, batch/event deduplication) and the
   health endpoints.
 - **The wire contract** (`docs/wire-contract.md`) — any way to make the service
   accept, store, or act on input outside the contract.
