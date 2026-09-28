@@ -7,6 +7,10 @@
 // DO NOT modify property names, types, [JsonPropertyName] values, required modifiers, or
 // property order — any change breaks the wire contract and the golden-fixture parity test.
 //
+// The member XML docs below describe the CURRENT engine's semantics (vouchfx#568 for
+// startupMs/timeToFirstTestMs). A row from an OLDER engine was measured differently;
+// docs/wire-contract.md states how.
+//
 // ONE DELIBERATE DIFFERENCE from the engine's record: SkippedEventLines is `required` on the
 // engine (every engine that emits schemaVersion 2 always populates it), but plain (not
 // `required`) here. This DTO also binds schemaVersion 1 lines, which pre-date this field

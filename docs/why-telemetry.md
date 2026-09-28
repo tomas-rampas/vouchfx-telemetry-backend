@@ -92,7 +92,7 @@ Check the outbox path any time by running:
 vouchfx telemetry status
 ```
 
-**Outbox format:** Each line is a complete JSON object (NDJSON — newline-delimited JSON). No line contains secrets or test content. Each line represents one run and contains the aggregate counts and timings collected during that run. Example fields (not an exhaustive list):
+**Outbox format:** Each line is a complete JSON object (NDJSON — newline-delimited JSON). No line contains secrets or test content. Each line represents one run and contains the aggregate counts and timings collected during that run. Example fields (not an exhaustive list) — an engine that includes vouchfx#588 writes:
 
 ```json
 {

@@ -56,7 +56,7 @@ touch can reach it — there is nowhere to put it.
 ```
 src/                 the ASP.NET Core service
 tests/               unit tests (no DB) + Testcontainers Postgres integration tests
-deploy/              Bicep IaC, Dockerfile inputs, bootstrap.sql
+deploy/              Bicep IaC, Dockerfile inputs, bootstrap.sql + bootstrap-schema-evolution.sql
 docs/                architecture, operations runbook, privacy, wire-contract
 .github/workflows/   CI (build/format/unit), integration, deploy
 ```

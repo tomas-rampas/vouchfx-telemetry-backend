@@ -35,13 +35,16 @@
 -- IDEMPOTENCY
 --   This script is fully re-runnable on an existing database:
 --   CREATE TABLE IF NOT EXISTS, CREATE INDEX IF NOT EXISTS,
---   CREATE OR REPLACE FUNCTION, CREATE OR REPLACE VIEW, and (§1a)
---   a catalog-guarded `DO $guard$` block that checks pg_attribute
---   before running an ADD COLUMN, so a schema-evolution step is
---   idempotent WITHOUT re-attempting the ALTER (and its ACCESS
---   EXCLUSIVE lock) once the column already exists.  Running this
---   script a second time produces no error and leaves the schema
---   unchanged.
+--   CREATE OR REPLACE FUNCTION, CREATE OR REPLACE VIEW.  Running
+--   this script a second time produces no error and leaves the
+--   schema unchanged.
+--
+--   Schema-evolution steps (e.g. adding skipped_event_lines,
+--   issue #30) live in the SEPARATE file bootstrap-schema-
+--   evolution.sql, not here — see that file's header for why.
+--   DbBootstrapper.BootstrapAsync runs it as its own command and
+--   transaction, on the same connection, immediately after this
+--   script, under the same advisory lock.
 -- ============================================================
 
 
@@ -80,9 +83,18 @@ CREATE TABLE IF NOT EXISTS telemetry_event (
     -- timing in milliseconds
     startup_ms              bigint      NOT NULL,
     time_to_first_test_ms   bigint      NOT NULL,
-    -- count of event-stream lines the engine's telemetry builder could not read
-    -- (schemaVersion 2+ only; a schemaVersion 1 event never carries it, hence the
-    -- DEFAULT 0 — see docs/wire-contract.md and issue #30)
+    -- Count of event-stream lines the engine's telemetry builder could not read
+    -- (issue #30; see docs/wire-contract.md). On a version-2 row stored by a
+    -- #30 backend, 0 means no line was skipped. On a version-1 row, a row
+    -- stored before the upgrade, or a version-2 row stored by a pre-#30
+    -- backend (the engine upgraded first, or an old replica during a rolling
+    -- upgrade), 0 means the count was not reported. NOT NULL DEFAULT 0 fills
+    -- those pre-existing rows on upgrade (bootstrap-schema-evolution.sql), and
+    -- also fills any row a pre-#30 replica inserts AFTER the column exists —
+    -- its INSERT statement, built before this column existed, never lists it,
+    -- so the default applies there too. It is not why a NEW version-1 insert
+    -- stores 0 — that writes 0 explicitly, like every other version-1 field
+    -- (NpgsqlTelemetryRepository.cs).
     skipped_event_lines     integer     NOT NULL DEFAULT 0,
 
     -- Natural dedup key.
@@ -103,43 +115,12 @@ CREATE TABLE IF NOT EXISTS telemetry_event_default
     PARTITION OF telemetry_event DEFAULT;
 
 
--- ------------------------------------------------------------
--- 1a. SCHEMA EVOLUTION — skipped_event_lines (issue #30)
---
---     CREATE TABLE IF NOT EXISTS above is a no-op on a database
---     that already has telemetry_event, so it does not add a
---     column introduced after the table first existed.  This
---     block is the idempotent upgrade path for such a
---     deployment; on a brand-new database the column already
---     exists (declared in the CREATE TABLE above) and the guard
---     condition is false, so the block is a no-op.
---
---     CATALOG-GUARDED, not `ALTER TABLE ... ADD COLUMN IF NOT
---     EXISTS`: an unconditional ADD COLUMN IF NOT EXISTS still
---     takes an ACCESS EXCLUSIVE lock on telemetry_event to check
---     and no-op, on EVERY start, even once the column exists —
---     and DbBootstrapper resets lock_timeout to DEFAULT before
---     running this script, so a long reader during a restart
---     would stall ingestion indefinitely.  Guarding the ALTER
---     behind a pg_attribute check means a warm start (the
---     column already there) takes only ACCESS SHARE to read the
---     catalog and never attempts the ALTER at all.
---
---     ALTER TABLE ADD COLUMN on a partitioned parent propagates
---     to every existing child partition automatically (and every
---     future partition inherits the parent's full column set at
---     creation time via ensure_partition), so no per-partition
---     statement is needed here.
--- ------------------------------------------------------------
-DO $guard$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_attribute
-                   WHERE attrelid = 'telemetry_event'::regclass
-                     AND attname = 'skipped_event_lines' AND NOT attisdropped) THEN
-        ALTER TABLE telemetry_event ADD COLUMN skipped_event_lines integer NOT NULL DEFAULT 0;
-    END IF;
-END
-$guard$;
+-- Schema-evolution steps (e.g. skipped_event_lines, issue #30) are NOT run
+-- from here — see bootstrap-schema-evolution.sql. Running the evolution step
+-- inside THIS script's single transaction produces a Postgres 40P01 deadlock:
+-- its ACCESS EXCLUSIVE on telemetry_event, followed in the same transaction
+-- by this script's own CREATE INDEX on ingest_batch below, reverses lock
+-- order against a concurrent ingest or forget-drain.
 
 
 -- ============================================================

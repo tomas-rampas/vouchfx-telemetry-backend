@@ -27,13 +27,15 @@ namespace Vouchfx.Telemetry.Backend.IntegrationTests;
 public sealed class UpgradePathTests(PostgresFixture fixture)
 {
     /// <summary>
-    /// Mutant M4 (deleting the upgrade block from <c>bootstrap.sql</c>) left every
-    /// pre-existing integration test green, because none of them simulated an existing
-    /// pre-#30 database. This test closes that gap end to end: drop the column (proving it
-    /// is gone from the parent AND every partition), seed legacy rows in both a day
-    /// partition and the DEFAULT partition, re-bootstrap, and assert the column is back
-    /// everywhere, correctly constrained, the legacy rows read 0, and a fresh version-2
-    /// ingest stores its real value.
+    /// Deleting the schema-evolution step (the guarded <c>ALTER</c> in
+    /// <c>bootstrap-schema-evolution.sql</c>) leaves every other integration test green,
+    /// because <see cref="PostgresFixture"/> bootstraps a brand-new, empty database where
+    /// <c>CREATE TABLE IF NOT EXISTS</c> already declares the column — none of those tests
+    /// simulates an existing pre-issue-#30 database. This test closes that gap end to end:
+    /// drop the column (proving it is gone from the parent AND every partition), seed
+    /// legacy rows in both a day partition and the DEFAULT partition, re-bootstrap, and
+    /// assert the column is back everywhere, correctly constrained, the legacy rows read
+    /// 0, and a fresh version-2 ingest stores its real value.
     /// </summary>
     [Fact]
     public async Task Bootstrap_UpgradesPreExistingDatabaseMissingSkippedEventLines()
@@ -100,13 +102,13 @@ public sealed class UpgradePathTests(PostgresFixture fixture)
     }
 
     /// <summary>
-    /// MINOR-3, measured: a warm start (column already present) must take only ACCESS
-    /// SHARE on <c>telemetry_event</c>, never attempting the guarded ALTER. A holder
-    /// transaction takes ACCESS SHARE via a plain SELECT and keeps it open; a concurrent
-    /// bootstrap run — under a bounded cancellation, so an unconditional ALTER's ACCESS
-    /// EXCLUSIVE wait shows up as a timeout here rather than hanging the test suite — must
-    /// still complete, because the guard means no ACCESS EXCLUSIVE lock is ever requested
-    /// when the column already exists.
+    /// A warm start (column already present) takes only ACCESS SHARE on
+    /// <c>telemetry_event</c>, never attempting the guarded ALTER. A holder transaction
+    /// takes ACCESS SHARE via a plain SELECT and keeps it open; a concurrent bootstrap run
+    /// — under a bounded cancellation, so an unconditional ALTER's ACCESS EXCLUSIVE wait
+    /// shows up as a timeout here rather than hanging the test suite — must still
+    /// complete, because the guard means no ACCESS EXCLUSIVE lock is ever requested when
+    /// the column already exists.
     /// </summary>
     /// <remarks>
     /// Runs an untimed bootstrap WARM before taking the reader's lock: <c>bootstrap.sql</c>'s

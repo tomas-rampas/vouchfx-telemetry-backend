@@ -55,7 +55,7 @@ Ensure PostgreSQL is running and note:
 
 ## Step 2: Bootstrap the database schema
 
-The backend's `DbBootstrapper` runs automatically on every startup (the DDL is idempotent — `CREATE TABLE IF NOT EXISTS` and friends) and executes `deploy/sql/bootstrap.sql` within the existing `vfxtelemetry` database. This:
+The backend's `DbBootstrapper` runs automatically on every startup (the DDL is idempotent — `CREATE TABLE IF NOT EXISTS` and friends) and executes two embedded scripts, in order, against the existing `vfxtelemetry` database: `deploy/sql/bootstrap.sql`, then `deploy/sql/bootstrap-schema-evolution.sql` as its own separate command (kept separate from `bootstrap.sql` to avoid a lock-order deadlock against a concurrent ingest or the forget drainer — see that file's header). Together they:
 
 1. Creates all tables: `telemetry_event` (partitioned), `ingest_batch`, `forget_queue`
 2. Creates the supporting indexes on those tables
@@ -65,14 +65,23 @@ The backend's `DbBootstrapper` runs automatically on every startup (the DDL is i
 
 The bootstrap is fully idempotent and safe to re-run; it uses `CREATE TABLE IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`, etc.
 
+**Upgrading:** a backend build that adds a column (e.g. `skipped_event_lines`) takes a brief, bounded-wait exclusive lock on `telemetry_event` on its first start; upgrade the backend before any engines that report the new field, or their events land with the column reading `0` for "not reported" rather than the true count.
+
 **Manual bootstrap (if you need to run it separately):**
 
 ```bash
 # Using psql (Postgres command-line client)
-psql -h localhost -U postgres -d vfxtelemetry -f deploy/sql/bootstrap.sql
+psql -h localhost -U postgres -d vfxtelemetry -v ON_ERROR_STOP=1 -f deploy/sql/bootstrap.sql
+
+# Run second, as its own command: adds any column introduced after the table
+# first existed (e.g. skipped_event_lines). Kept separate from bootstrap.sql
+# to avoid a lock-order deadlock against a concurrent ingest or the forget
+# drainer (see the file's header). On an EXISTING database, running only
+# bootstrap.sql skips this column and ingest then fails.
+psql -h localhost -U postgres -d vfxtelemetry -v ON_ERROR_STOP=1 -f deploy/sql/bootstrap-schema-evolution.sql
 ```
 
-You'll be prompted for the admin password.
+You'll be prompted for the admin password (once per command). psql autocommits each statement, so neither script shares a transaction with the other; `-v ON_ERROR_STOP=1` makes a failed step exit non-zero instead of psql carrying on to the next statement.
 
 **Create database explicitly (for non-containerised PostgreSQL):**
 

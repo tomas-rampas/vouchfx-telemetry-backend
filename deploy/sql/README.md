@@ -4,8 +4,11 @@ Target: PostgreSQL 16 on Azure Database for PostgreSQL Flexible Server
 
 This document specifies every parameterised SQL statement the C# ingest service
 (and its daily maintenance job) will execute against the schema created by
-`bootstrap.sql`.  Use it as the canonical reference when building the Npgsql
-repository layer.
+`bootstrap.sql` and `bootstrap-schema-evolution.sql` (the latter adds any column
+introduced after a table first existed, e.g. `skipped_event_lines`, and runs as
+its own command/transaction after `bootstrap.sql` — see that file's header for
+why).  Use it as the canonical reference when building the Npgsql repository
+layer.
 
 All statements use `$1`, `$2`, … positional placeholders as Npgsql expects for
 prepared statements.  Named parameters (`@name`) are noted where they clarify a
@@ -133,7 +136,11 @@ ON CONFLICT (install_id, event_timestamp, schema_version) DO NOTHING;
 -- $18 : string[]     step_providers   (JSON-serialised; cast to jsonb[])
 -- $19 : long[]       startup_ms
 -- $20 : long[]       time_to_first_test_ms
--- $21 : int[]        skipped_event_lines  (schemaVersion 2+ only; 0 for schemaVersion 1)
+-- $21 : int[]        skipped_event_lines  (0 is ambiguous: on a schemaVersion 2
+--                    row from a backend that includes this column, 0 means no
+--                    line was skipped; on a schemaVersion 1 row, a pre-upgrade
+--                    row, or a schemaVersion 2 row from a backend that predates
+--                    this column, 0 means the count was not reported)
 ```
 
 ### Npgsql array binding notes

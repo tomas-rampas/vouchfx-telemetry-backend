@@ -358,8 +358,10 @@ HTTP 200
 
 The database schema is **automatically bootstrapped at service startup** (Program.cs:215-220).
 The Container App runs `DbBootstrapper.BootstrapAsync()` during initialization, which
-idempotently creates the schema (tables, partitions, functions) using the embedded `bootstrap.sql`
-and an advisory lock to prevent concurrent executions.
+idempotently creates the schema (tables, partitions, functions) using two embedded scripts,
+`bootstrap.sql` then `bootstrap-schema-evolution.sql`, run in that order as separate commands
+under the same advisory lock (kept separate to avoid a lock-order deadlock against a concurrent
+ingest or the forget drainer — see the second script's header) to prevent concurrent executions.
 
 Verify the PostgreSQL database and schema are set up:
 
@@ -377,15 +379,29 @@ SELECT * FROM telemetry_event LIMIT 1;  # Check for your test event
 
 **Fallback (if the app lacks DDL rights):** If the database role `vfxteladmin` lacks `CREATE TABLE`
 or other DDL permissions (e.g. read-only roles), the bootstrap will fail and the app will not start.
-In that case, manually run the bootstrap SQL as an administrator:
+In that case, manually run **both** bootstrap scripts, in order, as an administrator — running only
+`bootstrap.sql` on an existing database skips any column introduced after the table first existed
+(e.g. `skipped_event_lines`), and ingest then fails:
 
 ```bash
 psql --host=<postgres-server-fqdn> \
      --port=5432 \
      --username=<postgres-admin> \
      --dbname=telemetry \
+     -v ON_ERROR_STOP=1 \
      -f deploy/sql/bootstrap.sql
+
+psql --host=<postgres-server-fqdn> \
+     --port=5432 \
+     --username=<postgres-admin> \
+     --dbname=telemetry \
+     -v ON_ERROR_STOP=1 \
+     -f deploy/sql/bootstrap-schema-evolution.sql
 ```
+
+psql autocommits each statement, so neither script shares a transaction with the other; `-v
+ON_ERROR_STOP=1` makes a failed step exit non-zero instead of psql carrying on to the next
+statement.
 
 ### 4.4 Key Vault & Secrets
 

@@ -38,7 +38,7 @@ The backend is a lean, stateless **ASP.NET Core 8 minimal-API service** that:
 - Extracts `schemaVersion` field; treats missing/non-integer as parse error
 - Schema versions 1–2 (`AllowlistParser.HighestKnownSchemaVersion` is 2, the highest version this backend knows): strict deserialization (rejects unknown fields via `UnmappedMemberHandling.Disallow`)
 - Schema versions above 2: lenient deserialization (unknown fields tolerated but never stored)
-- `skippedEventLines` exists on `TelemetryEvent` only from schema version 2 onward (issue #30); a schema version 1 line carrying it is refused via an explicit check, since the DTO now declares the member and strict mode alone can no longer treat it as unknown at version 1. Symmetrically, a schema version 2 line that omits `skippedEventLines` is also refused — the field is required from the version it is introduced at, checked before the unknown-field check runs
+- `skippedEventLines` is part of the wire shape only from schema version 2 onward (issue #30) — the DTO declares the member for every version, but a schema version 1 line carrying it is refused via an explicit check, since strict mode alone can no longer treat it as unknown at version 1 once the DTO declares the member. Symmetrically, a schema version 2 line that omits `skippedEventLines` is also refused — the field is required from the version it is introduced at, checked before the unknown-field check runs
 - Returns a `ParseResult` (union type): `Empty`, `TooManyLines`, `Bad`, or `Ok`
 - The `TelemetryEvent` record is the allowlist; only its declared properties can bind
 
@@ -141,8 +141,13 @@ CREATE TABLE telemetry_event (
     -- Timings (milliseconds)
     startup_ms              bigint      NOT NULL,
     time_to_first_test_ms   bigint      NOT NULL,
-    -- Event-stream lines the engine's telemetry builder could not read
-    -- (schemaVersion 2+ only; defaults to 0 for schemaVersion 1)
+    -- Event-stream lines the engine's telemetry builder could not read.
+    -- 0 is ambiguous by design (kept NOT NULL DEFAULT 0, never nullable):
+    -- on a schemaVersion 2 row stored by a backend that includes this
+    -- column, 0 means no line was skipped; on a schemaVersion 1 row, a
+    -- row stored before the upgrade, or a schemaVersion 2 row stored by
+    -- a backend that predates this column (e.g. an old replica during a
+    -- rolling upgrade), 0 means the count was not reported.
     skipped_event_lines     integer     NOT NULL DEFAULT 0,
     
     PRIMARY KEY (install_id, event_timestamp, schema_version)
