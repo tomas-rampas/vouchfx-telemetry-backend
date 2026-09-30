@@ -47,6 +47,15 @@ public sealed class UpgradeRaceTests(PostgresFixture fixture)
     [InlineData("drainer")]
     public async Task Bootstrap_DoesNotDeadlock_AgainstConcurrentCompetitor(string competitor)
     {
+        // Run one untimed WARM bootstrap first. bootstrap.sql's final step,
+        // ensure_partitions(current_date - 90, current_date + 7), pre-creates any partition
+        // due for "today"; without this warm-up, a UTC date rollover between the fixture's
+        // initial bootstrap and this case would make the timed bootstrap below create a
+        // brand-new day partition while holding ingest_batch, which deadlocks against the
+        // drainer competitor for a reason unrelated to the schema-evolution step under test.
+        var warmBootstrapper = new DbBootstrapper(fixture.DataSource, NullLogger<DbBootstrapper>.Instance);
+        await warmBootstrapper.BootstrapAsync(CancellationToken.None);
+
         // Simulate a pre-#30 database so the schema-evolution step actually runs the ALTER
         // (and therefore actually takes ACCESS EXCLUSIVE on telemetry_event) — a warm start
         // with the column already present never attempts it at all, which would make this

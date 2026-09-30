@@ -35,18 +35,24 @@
 --   (NpgsqlTelemetryRepository.IngestAsync) locks ingest_batch
 --   then telemetry_event; the forget drainer
 --   (ForgetQueueDrainer.DrainOneAsync) locks telemetry_event then
---   ingest_batch; the maintenance job (PartitionManager) never
---   locks a partition ahead of the parent.  Against every one of
---   those, a transaction that only ever touches telemetry_event
---   cannot form a lock-order cycle.  It can still be
---   BLOCKED (not deadlocked) behind a long-running reader of
---   telemetry_event, so its lock wait is bounded below
---   (set_config('lock_timeout', ...)) rather than left at
---   whatever the connection's ambient setting is: a start that
---   times out on the lock FAILS the start rather than stalling
---   ingestion indefinitely, and is safely retried on restart (see
---   bootstrap.sql's IDEMPOTENCY note — this file is idempotent
---   the same way).
+--   ingest_batch; the maintenance job (PartitionManager):
+--   ensure_partition locks telemetry_event (the parent) first, then
+--   telemetry_event_default, which it checks before creating the
+--   new partition; drop_old_partitions locks the parent first, then
+--   the specific partition being dropped; sweep_default is a DELETE
+--   that locks only telemetry_event_default directly and never
+--   touches the parent at all.  Against every one of those, a
+--   transaction that only ever touches telemetry_event cannot form
+--   a lock-order cycle: it can still be BLOCKED (never deadlocked)
+--   behind a long-running transaction — one holding a lock on the
+--   parent, or, for sweep_default specifically, a DELETE holding
+--   telemetry_event_default alone — so its lock wait is bounded
+--   below (set_config('lock_timeout',
+--   ...)) rather than left at whatever the connection's ambient
+--   setting is: a start that times out on the lock FAILS the start
+--   rather than stalling ingestion indefinitely, and is safely
+--   retried on restart (see bootstrap.sql's IDEMPOTENCY note — this
+--   file is idempotent the same way).
 --
 --   Regression-tested by UpgradeRaceTests (IntegrationTests):
 --   the upgrade run concurrently against an ingest-shaped and a
@@ -54,6 +60,29 @@
 --   (not timing luck) forcing the interleaving that used to
 --   deadlock under both the original placement and the
 --   "moved to the end of one script" placement.
+--
+--   RULES FOR ANY FUTURE STEP ADDED TO THIS FILE:
+--     1. Every statement in this file shares ONE transaction (this
+--        whole file is ONE NpgsqlCommand — see above), so a step here
+--        may only lock telemetry_event, and only parent before
+--        partition. A step touching any other table (e.g. a column
+--        added to ingest_batch) needs its OWN command in
+--        DbBootstrapper, exactly as this file is already its own
+--        command relative to bootstrap.sql — otherwise the reversed
+--        lock order this file exists to avoid comes back, unseen by
+--        UpgradeRaceTests: that test only drops skipped_event_lines,
+--        so a new step's own guard condition would be false in its
+--        test database and the new step would never run there.
+--     2. bootstrap.sql runs BEFORE this file (DbBootstrapper.
+--        BootstrapAsync), so it must never reference a column only
+--        this file adds. A view or SQL-language function in
+--        bootstrap.sql that reads such a column would make every
+--        start fail on a database that is not yet upgraded, before
+--        this file can add the column, so the upgrade could never
+--        apply. A fresh or already-upgraded database would not show
+--        it (a plpgsql function body is not checked when it is
+--        created). UpgradePathTests goes red at its DROP COLUMN
+--        step, because the view would depend on the column.
 -- ============================================================
 
 

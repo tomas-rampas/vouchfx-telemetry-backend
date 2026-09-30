@@ -17,9 +17,12 @@ namespace Vouchfx.Telemetry.Backend.Persistence;
 /// tables in the opposite order — regardless of which script the ACCESS EXCLUSIVE step
 /// lives in or where in that one script it runs. Running it as its own command gives it
 /// its own transaction, touching only the one table it needs — which cannot form a
-/// lock-order cycle with this service's own transactions (ingest, the forget drainer, the
-/// maintenance job): none of them locks one of that table's partitions before the table
-/// itself. See bootstrap-schema-evolution.sql's header for the full analysis and
+/// lock-order cycle with this service's own transactions: ingest and the forget drainer
+/// each lock this table and one other in a fixed order; the maintenance job's
+/// <c>ensure_partition</c> and <c>drop_old_partitions</c> lock the table before any
+/// partition, and <c>sweep_default</c> locks only the default partition directly, never
+/// the table itself. See bootstrap-schema-evolution.sql's header for the full analysis,
+/// the rules that keep a future step added to that file safe, and
 /// <c>UpgradeRaceTests</c> (IntegrationTests) for the regression test.
 /// </remarks>
 internal sealed partial class DbBootstrapper(NpgsqlDataSource dataSource, ILogger<DbBootstrapper> logger)
