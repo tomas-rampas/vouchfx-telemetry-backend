@@ -109,7 +109,7 @@ Update the `DB_CONNECTION_STRING` secret in GitHub with this value before (or im
 
 The Container App's startup sequence automatically runs `DbBootstrapper.BootstrapAsync()` if a connection string is configured. This:
 
-1. Executes `deploy/sql/bootstrap.sql` (fully idempotent: `CREATE TABLE IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`, etc.)
+1. Executes two embedded scripts, in order, each as its own command: `deploy/sql/bootstrap.sql` (fully idempotent: `CREATE TABLE IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`, etc.), then `deploy/sql/bootstrap-schema-evolution.sql` (kept separate to avoid a lock-order deadlock against a concurrent ingest or the forget drainer — see that file's header)
 2. Creates the schema: `telemetry_event` parent + DEFAULT partition, `ingest_batch`, `forget_queue`, functions, views
 3. Pre-creates daily partitions for the past 90 days + the next 7 days
 
@@ -126,6 +126,8 @@ SELECT schemaname, tablename FROM pg_tables WHERE tablename LIKE 'telemetry_even
 ```
 
 If bootstrap fails (e.g. network connectivity, wrong password), the Container App will not pass the readiness probe and Azure will not route traffic to it. Check **Container Apps → Logs** in the Azure Portal.
+
+**Upgrading an existing deployment (the `skipped_event_lines` column):** The first start of a backend build that adds this column takes an `ACCESS EXCLUSIVE` lock on `telemetry_event` once, with a bounded wait. Ingestion stalls while that start waits for its locks: the step waits up to 30 s for each lock it needs (the table, then each partition in turn), so readers holding different partitions in succession can stretch the total stall beyond 30 s — and the wait recurs on each restart for as long as the blocking reader persists. To keep counts consistent across the upgrade, upgrade the backend before the engines that report to it: a backend that predates this column drops the field on ingest, and those rows read `0` (indistinguishable from "no line was skipped" — see the Wire Contract). A start that times out waiting for the lock fails; it succeeds on retry once the lock is free.
 
 ## Configuration Reference
 

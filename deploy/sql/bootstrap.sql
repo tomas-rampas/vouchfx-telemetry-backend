@@ -35,9 +35,16 @@
 -- IDEMPOTENCY
 --   This script is fully re-runnable on an existing database:
 --   CREATE TABLE IF NOT EXISTS, CREATE INDEX IF NOT EXISTS,
---   CREATE OR REPLACE FUNCTION, CREATE OR REPLACE VIEW.
---   Running it a second time produces no error and leaves the
+--   CREATE OR REPLACE FUNCTION, CREATE OR REPLACE VIEW.  Running
+--   this script a second time produces no error and leaves the
 --   schema unchanged.
+--
+--   Schema-evolution steps (e.g. adding skipped_event_lines,
+--   issue #30) live in the SEPARATE file bootstrap-schema-
+--   evolution.sql, not here — see that file's header for why.
+--   DbBootstrapper.BootstrapAsync runs it as its own command and
+--   transaction, on the same connection, immediately after this
+--   script, under the same advisory lock.
 -- ============================================================
 
 
@@ -76,6 +83,19 @@ CREATE TABLE IF NOT EXISTS telemetry_event (
     -- timing in milliseconds
     startup_ms              bigint      NOT NULL,
     time_to_first_test_ms   bigint      NOT NULL,
+    -- Count of event-stream lines the engine's telemetry builder could not read
+    -- (issue #30; see docs/wire-contract.md). On a version-2 row stored by a
+    -- #30 backend, 0 means no line was skipped. On a version-1 row, a row
+    -- stored before the upgrade, or a version-2 row stored by a pre-#30
+    -- backend (the engine upgraded first, or an old replica during a rolling
+    -- upgrade), 0 means the count was not reported. NOT NULL DEFAULT 0 fills
+    -- those pre-existing rows on upgrade (bootstrap-schema-evolution.sql), and
+    -- also fills any row a pre-#30 replica inserts AFTER the column exists —
+    -- its INSERT statement, built before this column existed, never lists it,
+    -- so the default applies there too. It is not why a NEW version-1 insert
+    -- stores 0 — that writes 0 explicitly, like every other version-1 field
+    -- (NpgsqlTelemetryRepository.cs).
+    skipped_event_lines     integer     NOT NULL DEFAULT 0,
 
     -- Natural dedup key.
     -- event_timestamp is included because Postgres requires the
@@ -93,6 +113,14 @@ PARTITION BY RANGE (event_timestamp);
 -- purge run.
 CREATE TABLE IF NOT EXISTS telemetry_event_default
     PARTITION OF telemetry_event DEFAULT;
+
+
+-- Schema-evolution steps (e.g. skipped_event_lines, issue #30) are NOT run
+-- from here — see bootstrap-schema-evolution.sql. Running the evolution step
+-- inside THIS script's single transaction produces a Postgres 40P01 deadlock:
+-- its ACCESS EXCLUSIVE on telemetry_event, followed in the same transaction
+-- by this script's own CREATE INDEX on ingest_batch below, reverses lock
+-- order against a concurrent ingest or forget-drain.
 
 
 -- ============================================================

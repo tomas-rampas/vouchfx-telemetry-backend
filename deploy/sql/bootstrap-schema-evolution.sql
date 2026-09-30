@@ -1,0 +1,147 @@
+-- ============================================================
+-- vouchfx Telemetry Backend — schema-evolution steps
+-- Target: PostgreSQL 16 on Azure Database for PostgreSQL Flexible Server
+--
+-- WHY THIS IS A SEPARATE FILE FROM bootstrap.sql (issue #30)
+--   DbBootstrapper.BootstrapAsync sends bootstrap.sql as ONE
+--   NpgsqlCommand, which Npgsql sends as ONE extended-protocol
+--   batch with a single Sync, and which Postgres runs as ONE
+--   implicit transaction end to end (no explicit BEGIN).  A
+--   schema-evolution step that takes ACCESS EXCLUSIVE on
+--   telemetry_event (the skipped_event_lines ALTER below) used
+--   to run INSIDE that same transaction, ahead of bootstrap.sql's
+--   own CREATE INDEX IF NOT EXISTS on ingest_batch (which takes a
+--   ShareLock even when the index already exists).  That gave the
+--   bootstrap transaction the lock order
+--   telemetry_event -> ingest_batch, the REVERSE of
+--   NpgsqlTelemetryRepository.IngestAsync's ingest_batch ->
+--   telemetry_event — a measured 40P01 deadlock against a
+--   concurrent ingest.  Moving the block to the END of
+--   bootstrap.sql does not fix it: bootstrap.sql's own CREATE
+--   INDEX already touches ingest_batch first, so the ALTER at the
+--   end still gives the SAME transaction the order ingest_batch
+--   -> telemetry_event — which then deadlocks against
+--   ForgetQueueDrainer.DrainOneAsync instead, which locks
+--   telemetry_event -> ingest_batch.
+--
+--   THE FIX: this file runs as its OWN NpgsqlCommand (so its OWN
+--   implicit transaction), separately from bootstrap.sql, AFTER
+--   it, on the SAME connection and under the SAME advisory lock
+--   (DbBootstrapper.BootstrapAsync).  The ALTER below locks
+--   telemetry_event (the parent), then each of its partitions in
+--   turn — a transaction that itself locked one of those
+--   partitions before the parent could still cycle with it.  None
+--   of this service's own transactions do that: ingest
+--   (NpgsqlTelemetryRepository.IngestAsync) locks ingest_batch
+--   then telemetry_event; the forget drainer
+--   (ForgetQueueDrainer.DrainOneAsync) locks telemetry_event then
+--   ingest_batch; the maintenance job (PartitionManager):
+--   ensure_partition locks telemetry_event (the parent) first, then
+--   telemetry_event_default, which it checks before creating the
+--   new partition; drop_old_partitions locks the parent first, then
+--   the specific partition being dropped; sweep_default is a DELETE
+--   that locks only telemetry_event_default directly and never
+--   touches the parent at all.  Against every one of those, a
+--   transaction that only ever touches telemetry_event cannot form
+--   a lock-order cycle: it can still be BLOCKED, never deadlocked,
+--   by one of this service's own transactions that runs long — one
+--   holding a lock on the parent, or, for sweep_default
+--   specifically, a DELETE holding telemetry_event_default alone —
+--   so its lock wait is bounded below (set_config('lock_timeout',
+--   ...)) rather than left at whatever the connection's ambient
+--   setting is: a start that times out on the lock FAILS the start
+--   rather than stalling ingestion indefinitely, and is safely
+--   retried on restart (see bootstrap.sql's IDEMPOTENCY note — this
+--   file is idempotent the same way).
+--
+--   Regression-tested by UpgradeRaceTests (IntegrationTests):
+--   the upgrade run concurrently against an ingest-shaped and a
+--   drainer-shaped competitor, with explicit locks and barriers
+--   (not timing luck) forcing the interleaving that used to
+--   deadlock under both the original placement and the
+--   "moved to the end of one script" placement.
+--
+--   RULES FOR ANY FUTURE STEP ADDED TO THIS FILE:
+--     1. Every statement in this file shares ONE transaction (this
+--        whole file is ONE NpgsqlCommand — see above), so a step here
+--        may only lock telemetry_event, and only parent before
+--        partition. A step touching any other table (e.g. a column
+--        added to ingest_batch) needs its OWN command in
+--        DbBootstrapper, exactly as this file is already its own
+--        command relative to bootstrap.sql — otherwise the reversed
+--        lock order this file exists to avoid comes back, unseen by
+--        UpgradeRaceTests: that test only drops skipped_event_lines,
+--        so a new step's own guard condition would be false in its
+--        test database and the new step would never run there.
+--     2. bootstrap.sql runs BEFORE this file (DbBootstrapper.
+--        BootstrapAsync), so it must never reference a column only
+--        this file adds. A view or SQL-language function in
+--        bootstrap.sql that reads such a column would make every
+--        start fail on a database that is not yet upgraded, before
+--        this file can add the column, so the upgrade could never
+--        apply. A fresh or already-upgraded database would not show
+--        it (a plpgsql function body is not checked when it is
+--        created). UpgradePathTests goes red at its DROP COLUMN
+--        step, because the view would depend on the column.
+-- ============================================================
+
+
+-- ------------------------------------------------------------
+-- 1a. SCHEMA EVOLUTION — skipped_event_lines (issue #30)
+--
+--     CREATE TABLE IF NOT EXISTS in bootstrap.sql is a no-op on
+--     a database that already has telemetry_event, so it does
+--     not add a column introduced after the table first existed.
+--     This block is the idempotent upgrade path for such a
+--     deployment; on a brand-new database the column already
+--     exists (declared in bootstrap.sql's CREATE TABLE) and the
+--     guard condition is false, so the block is a no-op.
+--
+--     CATALOG-GUARDED, not `ALTER TABLE ... ADD COLUMN IF NOT
+--     EXISTS`: an unconditional ADD COLUMN IF NOT EXISTS still
+--     takes an ACCESS EXCLUSIVE lock on telemetry_event to check
+--     and no-op, on EVERY start, even once the column exists.
+--     Guarding the ALTER behind a pg_attribute check means a warm
+--     start (the column already there) takes only ACCESS SHARE
+--     to read the catalog and never attempts the ALTER at all.
+--
+--     ALTER TABLE ADD COLUMN on a partitioned parent propagates
+--     to every existing child partition automatically (and every
+--     future partition inherits the parent's full column set at
+--     creation time via ensure_partition), so no per-partition
+--     statement is needed here.
+-- ------------------------------------------------------------
+DO $guard$
+BEGIN
+    -- Bound THIS transaction's lock wait: a long reader of
+    -- telemetry_event during an upgrade start fails the start
+    -- after 30s instead of blocking it (and, transitively,
+    -- ingestion behind the advisory lock) indefinitely. The start
+    -- is safely retried on restart — this whole step is
+    -- idempotent (the guard condition below is false once the
+    -- ALTER has succeeded once).
+    --
+    -- This 30s bound has no automated test: removing this line
+    -- leaves every existing test green (none holds a reader open
+    -- for 30s), and a test that actually waited it out would cost
+    -- 30s or more per run. On PostgreSQL 16, running the real
+    -- DbBootstrapper behind a held reader of telemetry_event
+    -- failed with 55P03 after 30.0s, left no advisory lock and no
+    -- partially-applied column behind, and a subsequent retry
+    -- (once the reader released) succeeded.
+    PERFORM set_config('lock_timeout', '30s', true);
+
+    -- 'telemetry_event'::regclass throws if no such relation exists at all — that
+    -- failure is left loud and unguarded (a genuinely missing table is a real
+    -- problem, not something to silently skip past). relkind = 'p' additionally
+    -- requires it to be a PARTITIONED table specifically, so a mistaken manual run
+    -- against an unrelated plain table that happens to be named telemetry_event
+    -- (e.g. in the wrong database or schema) does not add this column to it.
+    IF (SELECT relkind FROM pg_class WHERE oid = 'telemetry_event'::regclass) = 'p'
+       AND NOT EXISTS (SELECT 1 FROM pg_attribute
+                       WHERE attrelid = 'telemetry_event'::regclass
+                         AND attname = 'skipped_event_lines' AND NOT attisdropped) THEN
+        ALTER TABLE telemetry_event ADD COLUMN skipped_event_lines integer NOT NULL DEFAULT 0;
+    END IF;
+END
+$guard$;

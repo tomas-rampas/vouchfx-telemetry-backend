@@ -17,7 +17,7 @@ Telemetry is **strictly opt-in**: nothing is collected until you explicitly run 
 
 The backend stores only the fields listed in the **allowlist** (see [Wire Contract §TelemetryEvent Schema](wire-contract.md#telemetryevent-schema)). A strict rule governs both the engine client and the backend:
 
-**Allowed fields:** Version identifiers, run/scenario/step counts, verdict breakdowns (pass/fail/environment error/inconclusive), step family and provider usage, wall-clock timings (startup, time-to-first-test).
+**Allowed fields:** Version identifiers, run/scenario/step counts, verdict breakdowns (pass/fail/environment error/inconclusive), step family and provider usage, wall-clock timings (startup, time-to-first-test), a count of event-stream lines the engine's telemetry builder could not read (from schemaVersion 2).
 
 **Never collected:**
 - Test step names, step IDs, or any step contents
@@ -92,11 +92,11 @@ Check the outbox path any time by running:
 vouchfx telemetry status
 ```
 
-**Outbox format:** Each line is a complete JSON object (NDJSON — newline-delimited JSON). No line contains secrets or test content. Each line represents one run and contains the aggregate counts and timings collected during that run. Example fields (not an exhaustive list):
+**Outbox format:** Each line is a complete JSON object (NDJSON — newline-delimited JSON). No line contains secrets or test content. Each line represents one run and contains the aggregate counts and timings collected during that run. Example fields (not an exhaustive list) — an engine that includes vouchfx#588 writes:
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "timestamp": "2026-06-28T14:30:00+00:00",
   "installId": "550e8400-e29b-41d4-a716-446655440000",
   "toolVersion": "1.0.0",
@@ -110,10 +110,17 @@ vouchfx telemetry status
     "envError": 0,
     "inconclusive": 0
   },
+  "scenarioVerdicts": {
+    "pass": 2,
+    "fail": 1,
+    "envError": 0,
+    "inconclusive": 0
+  },
   "stepFamilies": {"http": 5, "db-assert": 3, "script": 2},
   "stepProviders": {"http.rest": 5, "db-assert.postgres": 3},
   "startupMs": 5000,
-  "timeToFirstTestMs": 8500
+  "timeToFirstTestMs": 8500,
+  "skippedEventLines": 0
 }
 ```
 

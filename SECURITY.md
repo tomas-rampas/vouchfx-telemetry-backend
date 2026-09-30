@@ -78,7 +78,7 @@ operate your own instance, track `main`.
 Security issues in the parts of this repository the project maintains:
 
 - **The ingest service** itself: `POST /v1/telemetry` (Bearer-token authentication,
-  NDJSON parsing, strict v1 schema validation, batch/event deduplication) and the
+  NDJSON parsing, strict v1–v2 schema validation, batch/event deduplication) and the
   health endpoints.
 - **The wire contract** (`docs/wire-contract.md`) — any way to make the service
   accept, store, or act on input outside the contract.
@@ -94,7 +94,7 @@ Security issues in the parts of this repository the project maintains:
   can be correlated back to a person, machine, or customer system, that is in scope
   and high priority.
 - **The deployment and CI assets we publish** (`Dockerfile`, `deploy/` Bicep and
-  `bootstrap.sql`, `.github/workflows/`) — a software-supply-chain surface.
+  `bootstrap.sql`/`bootstrap-schema-evolution.sql`, `.github/workflows/`) — a software-supply-chain surface.
   Examples: workflow injection via untrusted input, secret/token exfiltration, or
   image tampering.
 

@@ -4,8 +4,11 @@ Target: PostgreSQL 16 on Azure Database for PostgreSQL Flexible Server
 
 This document specifies every parameterised SQL statement the C# ingest service
 (and its daily maintenance job) will execute against the schema created by
-`bootstrap.sql`.  Use it as the canonical reference when building the Npgsql
-repository layer.
+`bootstrap.sql` and `bootstrap-schema-evolution.sql` (the latter adds any column
+introduced after a table first existed, e.g. `skipped_event_lines`, and runs as
+its own command/transaction after `bootstrap.sql` — see that file's header for
+why).  Use it as the canonical reference when building the Npgsql repository
+layer.
 
 All statements use `$1`, `$2`, … positional placeholders as Npgsql expects for
 prepared statements.  Named parameters (`@name`) are noted where they clarify a
@@ -86,7 +89,8 @@ INSERT INTO telemetry_event (
     step_families,
     step_providers,
     startup_ms,
-    time_to_first_test_ms
+    time_to_first_test_ms,
+    skipped_event_lines
 )
 SELECT
     unnest($1::uuid[]),
@@ -108,7 +112,8 @@ SELECT
     unnest($17::jsonb[]),
     unnest($18::jsonb[]),
     unnest($19::bigint[]),
-    unnest($20::bigint[])
+    unnest($20::bigint[]),
+    unnest($21::int[])
 ON CONFLICT (install_id, event_timestamp, schema_version) DO NOTHING;
 
 -- $1  : Guid[]       install_id
@@ -131,6 +136,11 @@ ON CONFLICT (install_id, event_timestamp, schema_version) DO NOTHING;
 -- $18 : string[]     step_providers   (JSON-serialised; cast to jsonb[])
 -- $19 : long[]       startup_ms
 -- $20 : long[]       time_to_first_test_ms
+-- $21 : int[]        skipped_event_lines  (0 is ambiguous: on a schemaVersion 2
+--                    row from a backend that includes this column, 0 means no
+--                    line was skipped; on a schemaVersion 1 row, a pre-upgrade
+--                    row, or a schemaVersion 2 row from a backend that predates
+--                    this column, 0 means the count was not reported)
 ```
 
 ### Npgsql array binding notes
@@ -141,9 +151,13 @@ ON CONFLICT (install_id, event_timestamp, schema_version) DO NOTHING;
 - For `$17` and `$18`, serialise each `Dictionary<string,int>` to a JSON string
   in C# (`System.Text.Json.JsonSerializer.Serialize`) before building the
   `string[]`; set `DataTypeName = "jsonb[]"`.
-- All arrays must be the same length; the `unnest` parallel-unnest behaviour
-  (multiple `unnest` calls in the same SELECT list) is guaranteed in PostgreSQL
-  9.4+ to expand in lock-step when lengths match, and raises an error on mismatch.
+- All arrays must be the same length. Multiple `unnest` calls in the same
+  SELECT list expand in lock-step when lengths match (guaranteed since
+  PostgreSQL 9.4). On a length mismatch, PostgreSQL 10+ does **not** raise an
+  error — it pads the shorter array(s) with `NULL` to match the longest
+  (measured on PostgreSQL 16.14). The `NOT NULL` columns on `telemetry_event`
+  catch a mismatch instead: the `INSERT` fails with a not-null violation
+  rather than silently padding data.
 
 ### ON CONFLICT behaviour
 

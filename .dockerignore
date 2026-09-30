@@ -11,9 +11,12 @@
 tests/
 
 # IaC, docs, scripts — not needed inside the container.
-# deploy/sql/ is re-included below: bootstrap.sql is an EmbeddedResource in the
-# service project (path: ../../deploy/sql/bootstrap.sql relative to the .csproj)
-# and must be present in the build stage for `dotnet publish` to succeed.
+# deploy/sql/ is re-included below: bootstrap.sql AND bootstrap-schema-evolution.sql
+# are both EmbeddedResources in the service project (paths relative to the .csproj:
+# ../../deploy/sql/bootstrap.sql and ../../deploy/sql/bootstrap-schema-evolution.sql)
+# and must both be present in the build stage for `dotnet publish` to succeed.
+# !deploy/sql/ alone already re-includes the whole directory (so both files reach a
+# `FROM scratch` build); !deploy/sql/bootstrap.sql is redundant given that, but kept.
 deploy/
 !deploy/sql/
 !deploy/sql/bootstrap.sql

@@ -17,7 +17,7 @@ The vouchfx telemetry system is **privacy-allowlist-only by construction**. It d
 
 **Structural guarantee:** The `TelemetryEvent` record is an explicit allowlist of permitted fields. Any field not declared on this record has no property to bind to during JSON deserialization, and therefore **cannot be stored no matter how the client sends it**. This physical absence is the "provably never sent" contract.
 
-The engine enforces this allowlist at the client side; the backend enforces it again at the ingest side (strict schema validation for v1 events). Double enforcement is defence-in-depth.
+The engine enforces this allowlist at the client side; the backend enforces it again at the ingest side (strict schema validation for schema versions 1–2, the versions this backend knows). Double enforcement is defence-in-depth.
 
 ## Allowed Data
 
@@ -32,6 +32,7 @@ The backend stores only these aggregate, non-identifying metrics per run:
 | Step family counts | {"http": 3, "db-assert": 1} | Which step families were used (closed taxonomy, no customer data) |
 | Step provider counts | {"http.rest": 3, "db-assert.postgres": 1} | Which built-in providers were used (closed taxonomy) |
 | Timing metrics | startupMs: 5000, timeToFirstTestMs: 8500 | Non-identifying wall-clock durations (milliseconds) |
+| Skipped event-stream lines | skippedEventLines: 2 | A count only: how many event-stream lines the engine's telemetry builder could not read while building this event. Never which line or what it contained. Required at `schemaVersion` 2 (issue #30); absent at `schemaVersion` 1; reads as `0` when absent above `schemaVersion` 2. |
 | Timestamp | ISO8601 in UTC | When this run ended (client-reported) |
 
 **Closed taxonomies:** Step families (all eleven Core families: `http`, `db-assert`, `mq-publish`, `mq-expect`, `cache-assert`, `mail-expect`, `webhook-listen`, `metrics-assert`, `storage-assert`, `trace-expect`, `script`) and step providers (the twenty-five Core `family.provider` ids — `http.rest`, `db-assert.postgres`, `mq-publish.kafka`, etc.; the [engine README](https://github.com/tomas-rampas/vouchfx#readme) carries the full catalogue) are frozen enumerations. Any custom/non-Core provider step is bucketed under a generic `"custom"` key so that author-chosen step kind identifiers (which might contain customer names or project identifiers) are never transmitted. (Engines released up to `v1.0.0-alpha.5` counted only the original six families and six provider ids; on those versions the remaining Core steps also appear under `"custom"`.)
@@ -137,10 +138,10 @@ The `/v1/telemetry/forget` endpoint is authorized only by the shared ingest toke
 ### What the Backend Logs
 
 - **Ingest success:** `"Ingested batch <idempotencyKey>: <newRows> new row(s), <totalEvents> event(s)"`
-  - The install ID is **not** logged
+  - The install ID is **not** logged by this success line
   - The idempotency key is logged (SHA-256 hex of the request body, not reversible)
   
-- **Ingest errors:** Parse errors and validation failures (reason logged, but not the raw event data)
+- **Ingest errors:** Parse errors and validation failures are logged at Information via `LogMalformedBatch`, using the refusal's `Bad.Reason` string. That reason is not a fixed, bounded message: it can carry a property name or JSON map key from the offending line; an input value (e.g. `"schemaVersion must be >= 1, got -7"`); and, for malformed JSON, a **verbatim fragment of the raw line** — `System.Text.Json`'s reader quotes the remainder of the line in its exception message once it hits an invalid literal, which has been measured to include a full `installId` and other field values, and, in one measured case, a 200,509-character reason. So the install ID **can** be logged this way. This predates issue #30 (`origin/main` already logs `ex.Message` the same way); #30 additionally routes unknown schema-version-2 field names through the same path. Redacting the logged reason (including this literal-echo case) is tracked in [tomas-rampas/vouchfx-telemetry-backend#31](https://github.com/tomas-rampas/vouchfx-telemetry-backend/issues/31).
   
 - **Forget requests:** `"Forget request processed for <installIdPrefix>"`
   - The install ID is truncated to the first 8 characters followed by an ellipsis (e.g. `550e8400…`)

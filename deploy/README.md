@@ -45,6 +45,7 @@ deploy/
 |   |-- dev.bicepparam      # Non-secret dev parameters (Burstable B1ms, 30-day retention)
 |   `-- prod.bicepparam     # Non-secret prod parameters (GP D2s_v3, 90-day retention)
 |-- sql/bootstrap.sql       # DB schema (applied automatically at service startup)
+|-- sql/bootstrap-schema-evolution.sql  # Schema-evolution step, applied after bootstrap.sql as its own transaction
 `-- OPERATOR-HANDBACK.md    # Full operator runbook: verification, troubleshooting, hardening
 ```
 
@@ -220,7 +221,8 @@ curl -i https://<app-fqdn>/readyz    # 200 = DB reachable; 503 = see OPERATOR-HA
 ```
 
 The database schema is bootstrapped automatically at service startup (idempotent, embedded
-`sql/bootstrap.sql`, guarded by an advisory lock). For a full smoke test — ingesting a
+`sql/bootstrap.sql` then `sql/bootstrap-schema-evolution.sql` — run in that order, as separate
+commands, under the same advisory lock). For a full smoke test — ingesting a
 sample NDJSON batch with the required `Idempotency-Key` header — follow
 [`OPERATOR-HANDBACK.md` §4](OPERATOR-HANDBACK.md#4-post-deployment-verification).
 

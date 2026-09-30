@@ -9,8 +9,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Link bootstrap.sql as embedded resource so DbBootstrapper can load it at runtime -->
+    <!-- Link bootstrap.sql and its schema-evolution companion as embedded resources so
+         DbBootstrapper can load and run them (as two separate commands/transactions —
+         see bootstrap-schema-evolution.sql's header) at runtime. -->
     <EmbeddedResource Include="..\..\deploy\sql\bootstrap.sql" LogicalName="bootstrap.sql" />
+    <EmbeddedResource Include="..\..\deploy\sql\bootstrap-schema-evolution.sql" LogicalName="bootstrap-schema-evolution.sql" />
   </ItemGroup>
 
 </Project>

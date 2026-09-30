@@ -154,7 +154,7 @@ internal sealed partial class NpgsqlTelemetryRepository(
     }
 
     /// <summary>
-    /// Builds and executes the 20-parameter unnest bulk INSERT (README §3).
+    /// Builds and executes the 21-parameter unnest bulk INSERT (README §3).
     /// Returns the number of rows actually inserted (ON CONFLICT DO NOTHING rows excluded).
     /// </summary>
     private static async Task<int> ExecuteBulkInsertAsync(
@@ -172,7 +172,8 @@ internal sealed partial class NpgsqlTelemetryRepository(
                 step_pass, step_fail, step_env_error, step_inconclusive,
                 scenario_pass, scenario_fail, scenario_env_error, scenario_inconclusive,
                 step_families, step_providers,
-                startup_ms, time_to_first_test_ms
+                startup_ms, time_to_first_test_ms,
+                skipped_event_lines
             )
             SELECT
                 unnest($1::uuid[]),
@@ -194,11 +195,12 @@ internal sealed partial class NpgsqlTelemetryRepository(
                 unnest($17::jsonb[]),
                 unnest($18::jsonb[]),
                 unnest($19::bigint[]),
-                unnest($20::bigint[])
+                unnest($20::bigint[]),
+                unnest($21::int[])
             ON CONFLICT (install_id, event_timestamp, schema_version) DO NOTHING
             """;
 
-        // Build the 20 parallel arrays.
+        // Build the 21 parallel arrays.
         var count = events.Count;
 
         var installIds = new Guid[count];
@@ -221,6 +223,7 @@ internal sealed partial class NpgsqlTelemetryRepository(
         var stepProvidersJson = new string[count];
         var startupMs = new long[count];
         var timeToFirstTestMs = new long[count];
+        var skippedEventLines = new int[count];
 
         for (var i = 0; i < count; i++)
         {
@@ -246,6 +249,7 @@ internal sealed partial class NpgsqlTelemetryRepository(
             stepProvidersJson[i] = JsonSerializer.Serialize(ev.StepProviders, JsonOpts);
             startupMs[i] = ev.StartupMs;
             timeToFirstTestMs[i] = ev.TimeToFirstTestMs;
+            skippedEventLines[i] = ev.SkippedEventLines;
         }
 
         await using var cmd = new NpgsqlCommand(Sql, conn, tx);
@@ -270,6 +274,7 @@ internal sealed partial class NpgsqlTelemetryRepository(
         cmd.Parameters.Add(new NpgsqlParameter { Value = stepProvidersJson, DataTypeName = "jsonb[]" });
         cmd.Parameters.Add(new NpgsqlParameter { Value = startupMs, DataTypeName = "int8[]" });
         cmd.Parameters.Add(new NpgsqlParameter { Value = timeToFirstTestMs, DataTypeName = "int8[]" });
+        cmd.Parameters.Add(new NpgsqlParameter { Value = skippedEventLines, DataTypeName = "int4[]" });
 
         return await cmd.ExecuteNonQueryAsync(ct);
     }
