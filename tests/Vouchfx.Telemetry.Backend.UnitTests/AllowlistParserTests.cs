@@ -13,8 +13,7 @@ public sealed class AllowlistParserTests
 
     // schemaVersion 2, WITH skippedEventLines — required for any schemaVersion-2 test that
     // must reach strict deserialization: a v2 line missing skippedEventLines is refused by
-    // the field-presence guard before strict parsing ever runs (see
-    // UnknownFieldAtSchemaVersion2_ReturnsBad's history).
+    // the field-presence guard before strict parsing ever runs.
     private static readonly string ValidLineV2 = File.ReadAllText(
         Path.Combine(AppContext.BaseDirectory, "Fixtures", "event-line-v2.json")).TrimEnd('\r', '\n');
 
@@ -196,16 +195,14 @@ public sealed class AllowlistParserTests
     [Fact]
     public void UnknownFieldAtSchemaVersion2_ReturnsBad()
     {
-        // Reverses the pre-#30 premise: schemaVersion 2 is now a KNOWN version (strict
-        // parsing), so an unknown field at v2 is refused just like at v1.
+        // schemaVersion 2 is a KNOWN version (strict parsing), so an unknown field at v2 is
+        // refused just like at v1.
         //
-        // MUST be built from ValidLineV2 (carries skippedEventLines), not ValidLine with
-        // schemaVersion overwritten to 2: a v2 line WITHOUT skippedEventLines is refused by
-        // the field-presence guard before strict parsing ever runs, so such a line is
-        // refused whether or not version 2 is parsed strictly. Built that way, this test
-        // stayed green under a mutant that parsed version 2 leniently. Asserting that the
-        // reason names futureField pins that this test exercises Disallow, not the presence
-        // guard.
+        // The line is built from ValidLineV2 (carries skippedEventLines), not from ValidLine
+        // with schemaVersion overwritten to 2: a v2 line WITHOUT skippedEventLines is refused
+        // by the field-presence guard before strict parsing runs, so it would be refused
+        // whether or not version 2 is parsed strictly. Asserting that the reason names
+        // futureField pins that the refusal comes from Disallow, not the presence guard.
         var line = ValidLineV2.Replace(
             "\"schemaVersion\":2,", "\"schemaVersion\":2,\"futureField\":\"ignored\",", StringComparison.Ordinal);
         var result = AllowlistParser.Parse([line], 500);
@@ -216,11 +213,10 @@ public sealed class AllowlistParserTests
     [Fact]
     public void SkippedEventLinesMissingAtSchemaVersion2_ReturnsBad()
     {
-        // Rewritten (was ValidSchemaVersion2Line_WithoutSkippedEventLines_..._DefaultsToZero,
-        // which accepted this and defaulted to 0). The engine marks skippedEventLines
-        // `required` from schemaVersion 2, so every version-2 line the engine actually sends
-        // carries it, 0 included; a version-2 line without it no longer defaults — it is
-        // refused, because "strict for a known version" means the engine's exact shape.
+        // The engine marks skippedEventLines `required` from schemaVersion 2, so every
+        // version-2 line the engine actually sends carries it, 0 included. A version-2 line
+        // without it is refused rather than defaulted to 0, because "strict for a known
+        // version" means the engine's exact shape.
         var line = ValidLine.Replace("\"schemaVersion\":1,", "\"schemaVersion\":2,", StringComparison.Ordinal);
         var result = AllowlistParser.Parse([line], 500);
         var bad = Assert.IsType<ParseResult.Bad>(result);

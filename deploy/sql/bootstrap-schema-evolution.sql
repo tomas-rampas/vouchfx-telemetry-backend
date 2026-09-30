@@ -43,11 +43,11 @@
 --   that locks only telemetry_event_default directly and never
 --   touches the parent at all.  Against every one of those, a
 --   transaction that only ever touches telemetry_event cannot form
---   a lock-order cycle: it can still be BLOCKED (never deadlocked)
---   behind a long-running transaction — one holding a lock on the
---   parent, or, for sweep_default specifically, a DELETE holding
---   telemetry_event_default alone — so its lock wait is bounded
---   below (set_config('lock_timeout',
+--   a lock-order cycle: it can still be BLOCKED, never deadlocked,
+--   by one of this service's own transactions that runs long — one
+--   holding a lock on the parent, or, for sweep_default
+--   specifically, a DELETE holding telemetry_event_default alone —
+--   so its lock wait is bounded below (set_config('lock_timeout',
 --   ...)) rather than left at whatever the connection's ambient
 --   setting is: a start that times out on the lock FAILS the start
 --   rather than stalling ingestion indefinitely, and is safely
