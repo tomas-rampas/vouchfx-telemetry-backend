@@ -7,10 +7,10 @@
 
 The server half of [vouchfx](https://github.com/tomas-rampas/vouchfx)'s opt-in, privacy-first telemetry system.
 
-> **Status (post-pilot, 2026-07): self-host reference — no maintainer-hosted instance is
-> planned.** The pilot programme this backend was built for has been discontinued; the code is
-> complete, tested and kept as the reference implementation of the frozen `/v1/telemetry` wire
-> contract. The engine-side transport ships in the vouchfx engine and stays inert until an
+> **Status: self-host reference — no maintainer-hosted instance is planned.** This backend
+> implements the `/v1/telemetry` wire contract. Unit and PostgreSQL integration suites cover
+> different parts of the implementation; candidate engine/backend compatibility still requires
+> end-to-end validation. The engine-side transport ships in the vouchfx engine and stays inert until an
 > endpoint and token are configured, so engine telemetry remains local-only unless **you**
 > deploy this backend yourself ([self-hosting guide](docs/self-hosting.md), or the retained
 > [Azure/Bicep deployment](deploy/README.md)). The coverage badge measures the unit-testable

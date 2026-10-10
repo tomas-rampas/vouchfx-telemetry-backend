@@ -92,7 +92,7 @@ Check the outbox path any time by running:
 vouchfx telemetry status
 ```
 
-**Outbox format:** Each line is a complete JSON object (NDJSON — newline-delimited JSON). No line contains secrets or test content. Each line represents one run and contains the aggregate counts and timings collected during that run. Example fields (not an exhaustive list) — an engine that includes vouchfx#588 writes:
+**Outbox format:** Each line is a complete JSON object (NDJSON — newline-delimited JSON). No line contains secrets or test content. Each line represents one run and contains the aggregate counts and timings collected during that run. Example fields (not an exhaustive list) for telemetry schema version 2:
 
 ```json
 {
@@ -163,7 +163,7 @@ For details on how deletion is processed and its guarantees, see [Privacy Policy
 
 **Default retention:** 90 days. Telemetry events older than 90 days are automatically deleted on a daily maintenance job. You can configure a different retention window when deploying a backend.
 
-**Status (post-pilot):** The vouchfx telemetry backend is complete and tested, and is maintained as a **self-host reference implementation** — the pilot programme it was built for has been discontinued and **no maintainer-hosted instance is running or planned**. If you self-host a backend, you operate and own the database; retention and deletion are your responsibility.
+**Hosting status:** This backend is maintained as a **self-host reference implementation**; no maintainer-hosted instance is running or planned. If you self-host it, you operate and own the database; retention and deletion are your responsibility. Validate the configured engine/backend combination before relying on remote delivery.
 
 For authoritative details on data retention, how the backend processes deletions, and compliance considerations, see [Privacy Policy](privacy.md).
 

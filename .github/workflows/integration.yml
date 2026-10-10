@@ -7,13 +7,10 @@
 # must be a member of the docker group.
 #
 # Triggers:
-#   • pull_request targeting main  — runs alongside (not blocking) the CI job.
+#   • pull_request targeting main  — runs alongside the CI workflow.
 #   • schedule: nightly at 02:00 UTC — catches regressions between PRs.
 #   • workflow_dispatch — manual trigger for ad-hoc runs.
 #
-# NOTE: The integration tests project (tests/Vouchfx.Telemetry.Backend.IntegrationTests)
-# is planned but not yet checked in.  The test step guards against a missing
-# project directory and skips gracefully until it is created.
 # ────────────────────────────────────────────────────────────────────────────────
 name: Integration Tests
 
@@ -60,21 +57,13 @@ jobs:
       - name: Build
         run: dotnet build Vouchfx.Telemetry.Backend.sln -c Release --no-restore
 
-      # Guard: skip gracefully until the integration tests project exists and is
-      # added to the solution.  Once Vouchfx.Telemetry.Backend.IntegrationTests
-      # is checked in, remove the if-statement and rely on the build step.
       - name: Run integration tests
-        run: |
-          PROJ="tests/Vouchfx.Telemetry.Backend.IntegrationTests"
-          if [ -d "$PROJ" ]; then
-            dotnet test "$PROJ" \
-              -c Release \
-              --no-build \
-              --logger "trx;LogFileName=integration-results.trx" \
-              --logger "console;verbosity=normal"
-          else
-            echo "::warning::Integration tests project not found at $PROJ — skipping. Add the project and re-run."
-          fi
+        run: >
+          dotnet test tests/Vouchfx.Telemetry.Backend.IntegrationTests/Vouchfx.Telemetry.Backend.IntegrationTests.csproj
+          -c Release
+          --no-build
+          --logger "trx;LogFileName=integration-results.trx"
+          --logger "console;verbosity=normal"
 
       - name: Upload test results
         if: always()
