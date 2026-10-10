@@ -83,3 +83,20 @@ under Apache-2.0.
 ## Volatile facts on the documentation site
 
 Version numbers and registry counts shown on the rendered site are resolved at build time via `{{fact:...}}` tokens in `scripts/build_site.py` (with a checked-in fallback in `site/facts-fallback.json`). When writing documentation prose, do not hard-code the current engine or package version — reference the mechanism (a pin file, "the current release") or use a fact token, so pages cannot silently rot. Sibling repos trigger a rebuild here through the `repository_dispatch` trigger in `.github/workflows/pages.yml` (the workflow's `notify` job is the outbound half — it tells the siblings when this repo's own docs change).
+
+## Documentation validation
+
+Install the Python dependencies and immutable `vouchfx-site-tools` revision from
+[the documentation workflow](.github/workflows/docs.yml), then run:
+
+```sh
+python scripts/build_site.py _site
+python -m vouchfx_site_tools.check_social_card _site https://telemetry.vouchfx.io/
+```
+
+The read-only documentation job builds and checks the site on every pull request.
+Pages runs the same check before uploading its artefact. Both image URLs must
+resolve inside the built site on its configured origin and base path, with valid
+PNG headers, `1200x630` dimensions and a maximum size of 307,200 bytes. The check
+validates metadata and headers; it does not decode pixels or check the accent
+colour. A refusal returns exit code `1` and blocks publication.
