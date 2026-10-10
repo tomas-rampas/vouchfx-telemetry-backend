@@ -89,10 +89,25 @@ The allowlist contract (frozen for v1.x; extended additively at schema version 2
 | `timeToFirstTestMs` | `long` | With a run-start anchor: wall-clock milliseconds from the run starting to the earliest archived step-completed line. The archive is reconstructed after each scenario's script returns and gives every step line the same batch timestamp, so this spans the whole first scenario's steps rather than its first step alone. Older engines without that anchor measure from the earliest archived event, normally the first scenario-started line, to the earliest step-completed line. A non-identifying duration. |
 | `skippedEventLines` | `int` | The number of event-stream lines the engine's telemetry builder could not read while building this event. A non-identifying count: how many lines, never which line or what it contained. Introduced at `schemaVersion` 2 (issue #30): **required** at schema version 2 (a version-2 line without it is refused with 400), **absent** at schema version 1 (a version-1 line carrying it is refused with 400), and read as `0` when absent at any schema version above 2 (lenient mode). A stored `0` is ambiguous by construction, not just for an absent value: on a schema-version-2 row written by a backend that includes this change, `0` means no line was skipped; on a schema-version-1 row, a row stored before the backend was upgraded, a schema-version-2 row written by a backend that predates this change (e.g. during a rolling upgrade), or a schema-version-3-or-later row that omits the field (read as `0` under lenient parsing), `0` means the count was not reported. |
 
-`v_run_daily`'s timing percentiles mix both meanings above: schema-version-2 rows use the run-start
-anchor, while schema-version-1 rows may come from engines with or without it. The schema version does
-not distinguish those two version-1 populations; avoid interpreting mixed historical percentiles as
-a single timing definition. See [the timing aggregation limitation](https://github.com/tomas-rampas/vouchfx-telemetry-backend/issues/33).
+`v_run_daily` computes timing percentiles from **schema-version-2 rows only**, whose run-start anchor
+is known. Version-1 rows mix older and newer anchors and are excluded; future versions are also
+excluded until their timing semantics are verified. Run/scenario counts, verdict sums, and distinct
+install counts still include every schema version. Timing columns are SQL `NULL` on days with no
+version-2 events; they do not mean zero startup time. Existing view column names are preserved.
+
+#### Value Validation
+
+Every line must have a JSON object root. Counts (including verdict and usage-map values,
+`skippedEventLines`) and timings must be non-negative. The engine clamps timing deltas to zero
+when the clock moves backwards. Required version strings, verdict objects, and usage maps cannot
+be null. Zero counts/timings and empty maps are valid.
+
+At every schema version, usage-map keys must belong to the frozen Core taxonomy or be `custom`;
+arbitrary names are refused. Custom providers must be bucketed by the client. This rule also applies
+to lenient future-version parsing: new unknown fields are dropped, but existing allowlisted values
+remain validated. New Core tokens require a backend allowlist update. A violation returns HTTP 400
+for the entire batch, with a generic message and no storage call. Server logs contain fixed refusal
+text and a line number, never raw JSON or exception messages.
 
 #### TelemetryVerdictCounts Structure
 

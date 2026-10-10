@@ -17,25 +17,23 @@ the C# object to JSON string; the cast targets the correct server type).
 
 ---
 
-## 1. Partition pre-creation (before every bulk INSERT)
+## 1. Partition pre-creation (startup and maintenance)
 
-Before inserting a batch of events, the service must ensure that a day partition
-exists for every unique date present in the batch.  If the partition does not
-exist and the row's timestamp does not match the DEFAULT partition's catch-all
-semantics, the INSERT will still succeed (the DEFAULT partition catches it), but
-it is cleaner to pre-create explicit partitions so that aged-out rows can later
-be dropped as a whole partition rather than scanned row-by-row.
-
-The service collects the distinct `event_timestamp::date` values from the
-decoded batch, then executes one call per unique date:
+Ingest does not create partitions inside its bulk-insert transaction. The DEFAULT
+partition absorbs dates outside the explicit day window. Startup seeds the configured
+window after the schema and schema-evolution commands commit, in a separate transaction
+under the same session advisory lock. It sets `SET LOCAL lock_timeout = '5s'`, then executes:
 
 ```sql
-SELECT ensure_partition($1::date);
--- $1 : string  "YYYY-MM-DD"  e.g. "2026-06-28"
+SELECT ensure_partitions(current_date - $1::int, current_date + $2::int);
+-- $1 : int  RetentionDays (default 90)
+-- $2 : int  PrecreateDays (default 7; half-open range)
 ```
 
-`ensure_partition` is idempotent (`CREATE TABLE IF NOT EXISTS` internally), so
-calling it for a date that already has a partition is a no-op.
+The daily maintenance job pre-creates upcoming partitions, then removes expired ones.
+Restarting with shorter retention does not recreate the partitions it dropped. Keep
+partition creation outside the main bootstrap transaction: holding `ingest_batch` index
+locks while requesting the parent partition lock can deadlock with the forget drainer.
 
 ---
 

@@ -82,6 +82,11 @@ public static class AllowlistParser
             try
             {
                 using var doc = JsonDocument.Parse(line);
+                if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                {
+                    return new ParseResult.Bad($"Line {i + 1}: event must be a JSON object");
+                }
+
                 if (!doc.RootElement.TryGetProperty("schemaVersion", out var svElement))
                 {
                     return new ParseResult.Bad($"Line {i + 1}: missing schemaVersion");
@@ -94,7 +99,7 @@ public static class AllowlistParser
 
                 if (sv < 1)
                 {
-                    return new ParseResult.Bad($"Line {i + 1}: schemaVersion must be >= 1, got {sv}");
+                    return new ParseResult.Bad($"Line {i + 1}: schemaVersion must be >= 1");
                 }
 
                 // Versioned fields exist on TelemetryEvent for every known version, so strict
@@ -130,11 +135,18 @@ public static class AllowlistParser
                 var opts = sv <= HighestKnownSchemaVersion ? StrictOptions : LenientOptions;
                 var evt = JsonSerializer.Deserialize<TelemetryEvent>(line, opts)
                     ?? throw new JsonException("Deserialisation returned null");
+                if (TelemetryValueValidator.Validate(evt) is { } reason)
+                {
+                    return new ParseResult.Bad($"Line {i + 1}: {reason}");
+                }
+
                 events.Add(evt);
             }
-            catch (JsonException ex)
+            catch (JsonException)
             {
-                return new ParseResult.Bad($"Line {i + 1}: {ex.Message}");
+                // STJ messages and paths can echo arbitrary property names, map keys, and
+                // malformed literal fragments. Never carry them into server logs.
+                return new ParseResult.Bad($"Line {i + 1}: invalid JSON or event shape");
             }
         }
 

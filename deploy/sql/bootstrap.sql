@@ -4,7 +4,7 @@
 --
 -- PURPOSE
 --   Bootstraps all tables, indexes, functions, views, and
---   initial partitions required by the vouchfx telemetry
+--   default partition required by the vouchfx telemetry
 --   ingest service.
 --
 -- PARTITION STRATEGY — why event_timestamp, not received_at
@@ -45,6 +45,9 @@
 --   DbBootstrapper.BootstrapAsync runs it as its own command and
 --   transaction, on the same connection, immediately after this
 --   script, under the same advisory lock.
+--   Configured daily partition seeding follows in its OWN transaction in
+--   DbBootstrapper. Keeping it out of this script avoids holding ingest_batch
+--   locks while partition creation waits for telemetry_event (issue #34).
 -- ============================================================
 
 
@@ -389,6 +392,10 @@ GROUP BY 1, 2;
 --     Per-day rollup: run/scenario counts, verdict sums,
 --     startup and time-to-first-test percentiles (p50/p95),
 --     and distinct install count.
+--     Counts include every schema version. Timing percentiles include ONLY
+--     schema version 2, whose run-start anchor is known. Version 1 mixes old
+--     and new anchors; future versions require explicit semantic validation.
+--     With no version-2 events that day, timing percentiles return NULL.
 -- ------------------------------------------------------------
 CREATE OR REPLACE VIEW v_run_daily AS
 SELECT
@@ -407,12 +414,16 @@ SELECT
     SUM(scenario_env_error)                                           AS scenario_env_error,
     SUM(scenario_inconclusive)                                        AS scenario_inconclusive,
     -- startup timing percentiles (milliseconds)
-    percentile_cont(0.5)  WITHIN GROUP (ORDER BY startup_ms)         AS startup_ms_p50,
-    percentile_cont(0.95) WITHIN GROUP (ORDER BY startup_ms)         AS startup_ms_p95,
+    percentile_cont(0.5)  WITHIN GROUP (ORDER BY startup_ms)
+        FILTER (WHERE schema_version = 2)                             AS startup_ms_p50,
+    percentile_cont(0.95) WITHIN GROUP (ORDER BY startup_ms)
+        FILTER (WHERE schema_version = 2)                             AS startup_ms_p95,
     -- time-to-first-test timing percentiles (milliseconds)
     percentile_cont(0.5)  WITHIN GROUP (ORDER BY time_to_first_test_ms)
+        FILTER (WHERE schema_version = 2)
                                                                       AS time_to_first_test_ms_p50,
     percentile_cont(0.95) WITHIN GROUP (ORDER BY time_to_first_test_ms)
+        FILTER (WHERE schema_version = 2)
                                                                       AS time_to_first_test_ms_p95,
     -- distinct installs active that day
     COUNT(DISTINCT install_id)                                        AS distinct_installs
@@ -421,18 +432,12 @@ GROUP BY 1;
 
 
 -- ============================================================
--- 6. BOOTSTRAP PARTITIONS
+-- 6. DAILY PARTITIONS (separate transaction, configured window)
 --
---    Creates partitions covering:
---      - the trailing 90 days  (handles any backlog in the
---        client 30-day outbox + generous clock-skew margin)
---      - today and the next 6 days  (ensures the current day
---        and near-future days are pre-created before any
---        INSERT arrives)
---
---    This call is fully idempotent because ensure_partition
---    uses CREATE TABLE IF NOT EXISTS internally.  Running
---    bootstrap.sql again when partitions already exist is
---    harmless.
+--    DbBootstrapper seeds [current_date - RetentionDays,
+--    current_date + PrecreateDays) AFTER this script and schema evolution
+--    commit. Manual operators must do the same with their configured values.
+--    Do not add ensure_partitions here: in a single Npgsql command this
+--    would hold ingest_batch's index locks while requesting exclusive
+--    telemetry_event locks, deadlocking against a concurrent forget drainer.
 -- ============================================================
-SELECT ensure_partitions(current_date - 90, current_date + 7);

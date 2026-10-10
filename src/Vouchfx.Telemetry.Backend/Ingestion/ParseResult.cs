@@ -12,7 +12,9 @@ public abstract record ParseResult
 
     /// <summary>
     /// One or more lines failed validation or deserialisation.
-    /// <see cref="Reason"/> is for server-side logging only — never surfaced to callers.
+    /// <see cref="Reason"/> contains only fixed validation text and a line number,
+    /// never raw JSON, property names, map keys, or exception messages. It is for
+    /// server-side logging only — never surfaced to callers.
     /// </summary>
     public sealed record Bad(string Reason) : ParseResult;
 

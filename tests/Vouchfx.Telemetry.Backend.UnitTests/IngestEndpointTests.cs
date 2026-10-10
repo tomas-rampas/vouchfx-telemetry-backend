@@ -1,5 +1,6 @@
 // CA1707: underscore-separated names are the xUnit naming convention for test methods.
 #pragma warning disable CA1707
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
@@ -7,6 +8,7 @@ using System.Text;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Vouchfx.Telemetry.Backend.Contracts;
 using Vouchfx.Telemetry.Backend.Persistence;
 using Xunit;
@@ -80,7 +82,8 @@ public sealed class IngestEndpointTests : IClassFixture<WebApplicationFactory<Pr
         int maxBatchLines = 500,
         long maxBodyBytes = 2_097_152,
         int ratePermits = 120,
-        int rateWindowSeconds = 60)
+        int rateWindowSeconds = 60,
+        ILoggerProvider? loggerProvider = null)
     {
         return _factory.WithWebHostBuilder(b =>
         {
@@ -92,6 +95,8 @@ public sealed class IngestEndpointTests : IClassFixture<WebApplicationFactory<Pr
             b.ConfigureTestServices(services =>
             {
                 services.AddSingleton<ITelemetryRepository>(_stub);
+                if (loggerProvider is not null)
+                    services.AddLogging(logging => logging.AddProvider(loggerProvider));
             });
         }).CreateClient();
     }
@@ -216,6 +221,78 @@ public sealed class IngestEndpointTests : IClassFixture<WebApplicationFactory<Pr
         var client = CreateClient();
         var response = await client.SendAsync(BuildRequest(body: "{not json}"));
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("[1]")]
+    [InlineData("1")]
+    [InlineData("\"x\"")]
+    [InlineData("null")]
+    [InlineData("true")]
+    public async Task NonObjectEvent_Returns400_WithoutCallingStorage(string body)
+    {
+        using var client = CreateClient();
+        using var response = await client.SendAsync(BuildRequest(body: body));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(0, _stub.CallCount);
+        Assert.Equal("\"Malformed event data.\"", await response.Content.ReadAsStringAsync());
+    }
+
+    [Theory]
+    [InlineData("negative")]
+    [InlineData("unknown-map-key")]
+    [InlineData("null-verdicts")]
+    public async Task InvalidAllowlistValue_Returns400_WithoutCallingStorage(string invalidValue)
+    {
+        var node = System.Text.Json.Nodes.JsonNode.Parse(ValidEventLine)!.AsObject();
+        switch (invalidValue)
+        {
+            case "negative": node["runCount"] = -1; break;
+            case "unknown-map-key":
+                node["stepProviders"] = new System.Text.Json.Nodes.JsonObject { ["customer-secret"] = 1 };
+                break;
+            case "null-verdicts": node["stepVerdicts"] = null; break;
+        }
+
+        using var client = CreateClient();
+        using var response = await client.SendAsync(BuildRequest(body: node.ToJsonString()));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(0, _stub.CallCount);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task MalformedBatch_LogContainsNoRawInput(bool invalidLiteral)
+    {
+        const string Secret = "secret@example.com";
+        var body = invalidLiteral
+            ? "{\"schemaVersion\":1,\"timestamp\":nope-" + Secret + "}"
+            : ValidEventLine.Replace("\"schemaVersion\":1,",
+                "\"schemaVersion\":1,\"" + Secret + new string('x', 100_000) + "\":1,", StringComparison.Ordinal);
+        using var provider = new CaptureLoggerProvider();
+        using var client = CreateClient(loggerProvider: provider);
+        using var response = await client.SendAsync(BuildRequest(body: body));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var log = Assert.Single(provider.Messages, message => message.StartsWith("Rejected malformed batch:", StringComparison.Ordinal));
+        Assert.Equal("Rejected malformed batch: Line 1: invalid JSON or event shape", log);
+        Assert.DoesNotContain(provider.Messages, message => message.Contains(Secret, StringComparison.Ordinal));
+        Assert.Equal(0, _stub.CallCount);
+    }
+
+    private sealed class CaptureLoggerProvider : ILoggerProvider
+    {
+        public ConcurrentQueue<string> Messages { get; } = new();
+        public ILogger CreateLogger(string categoryName) => new CaptureLogger(Messages);
+        public void Dispose() { }
+
+        private sealed class CaptureLogger(ConcurrentQueue<string> messages) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(LogLevel logLevel) => true;
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state,
+                Exception? exception, Func<TState, Exception?, string> formatter) => messages.Enqueue(formatter(state, exception));
+        }
     }
 
     [Fact]

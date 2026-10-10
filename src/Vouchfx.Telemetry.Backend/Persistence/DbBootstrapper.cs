@@ -1,4 +1,6 @@
+using Microsoft.Extensions.Options;
 using Npgsql;
+using Vouchfx.Telemetry.Backend.Configuration;
 
 namespace Vouchfx.Telemetry.Backend.Persistence;
 
@@ -9,7 +11,7 @@ namespace Vouchfx.Telemetry.Backend.Persistence;
 /// (CREATE IF NOT EXISTS / CREATE OR REPLACE / a catalog-guarded schema-evolution step).
 /// </summary>
 /// <remarks>
-/// The two scripts run as TWO SEPARATE <see cref="NpgsqlCommand"/>s — deliberately, not
+/// The scripts and partition seeding run as separate transactions — deliberately, not
 /// merged into one (issue #30). A single multi-statement command runs as
 /// one implicit Postgres transaction; a schema-evolution step that takes ACCESS EXCLUSIVE
 /// on one table, sharing that transaction with the main script's own lock on a second
@@ -23,9 +25,15 @@ namespace Vouchfx.Telemetry.Backend.Persistence;
 /// partition, and <c>sweep_default</c> locks only the default partition directly, never
 /// the table itself. See bootstrap-schema-evolution.sql's header for the full analysis,
 /// the rules that keep a future step added to that file safe, and
-/// <c>UpgradeRaceTests</c> (IntegrationTests) for the regression test.
+/// <c>UpgradeRaceTests</c> (IntegrationTests) for the regression test. Partition seeding
+/// follows both scripts in its own transaction, uses the configured retention window,
+/// and bounds each lock wait to five seconds. It never holds the main DDL's ingest_batch
+/// locks while creating partitions (which would reverse the forget drainer's lock order).
 /// </remarks>
-internal sealed partial class DbBootstrapper(NpgsqlDataSource dataSource, ILogger<DbBootstrapper> logger)
+internal sealed partial class DbBootstrapper(
+    NpgsqlDataSource dataSource,
+    ILogger<DbBootstrapper> logger,
+    IOptions<TelemetryOptions> options)
 {
     private const long BootstrapLockKey = 152152153L;
 
@@ -57,11 +65,11 @@ internal sealed partial class DbBootstrapper(NpgsqlDataSource dataSource, ILogge
             $"SELECT pg_advisory_lock({BootstrapLockKey})", conn))
             await lockCmd.ExecuteNonQueryAsync(ct);
 
-        await using (var resetCmd = new NpgsqlCommand("SET lock_timeout = DEFAULT", conn))
-            await resetCmd.ExecuteNonQueryAsync(ct);
-
         try
         {
+            await using (var resetCmd = new NpgsqlCommand("SET lock_timeout = DEFAULT", conn))
+                await resetCmd.ExecuteNonQueryAsync(ct);
+
             await using (var bootstrapCmd = new NpgsqlCommand(mainSql, conn))
                 await bootstrapCmd.ExecuteNonQueryAsync(ct);
 
@@ -70,6 +78,23 @@ internal sealed partial class DbBootstrapper(NpgsqlDataSource dataSource, ILogge
             // same connection, so still covered by the advisory lock held above.
             await using (var evolutionCmd = new NpgsqlCommand(schemaEvolutionSql, conn))
                 await evolutionCmd.ExecuteNonQueryAsync(ct);
+
+            // Partition DDL must not share the main script's transaction: its exclusive
+            // telemetry_event lock can conflict with a drainer already holding that
+            // table and waiting for ingest_batch. Also never recreate retention-dropped
+            // partitions outside the configured window on every application restart.
+            await using (var partitionTx = await conn.BeginTransactionAsync(ct))
+            {
+                await using (var timeoutCmd = new NpgsqlCommand("SET LOCAL lock_timeout = '5s'", conn, partitionTx))
+                    await timeoutCmd.ExecuteNonQueryAsync(ct);
+
+                await using var partitionCmd = new NpgsqlCommand(
+                    "SELECT ensure_partitions(current_date - $1::int, current_date + $2::int)", conn, partitionTx);
+                partitionCmd.Parameters.Add(new NpgsqlParameter { Value = options.Value.RetentionDays, DataTypeName = "int4" });
+                partitionCmd.Parameters.Add(new NpgsqlParameter { Value = options.Value.PrecreateDays, DataTypeName = "int4" });
+                await partitionCmd.ExecuteNonQueryAsync(ct);
+                await partitionTx.CommitAsync(ct);
+            }
 
             LogBootstrapCompleted(logger);
         }

@@ -2,7 +2,9 @@
 #pragma warning disable CA1707
 
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Npgsql;
+using Vouchfx.Telemetry.Backend.Configuration;
 using Vouchfx.Telemetry.Backend.Persistence;
 using Xunit;
 
@@ -20,7 +22,7 @@ public sealed class BootstrapTests(PostgresFixture fixture)
     public async Task Bootstrap_IsIdempotent_RunningTwiceDoesNotThrow()
     {
         // bootstrap.sql was already applied in the fixture; run it again.
-        var bootstrapper = new DbBootstrapper(fixture.DataSource, NullLogger<DbBootstrapper>.Instance);
+        var bootstrapper = new DbBootstrapper(fixture.DataSource, NullLogger<DbBootstrapper>.Instance, Options.Create(new TelemetryOptions()));
         await bootstrapper.BootstrapAsync(CancellationToken.None); // must not throw
     }
 

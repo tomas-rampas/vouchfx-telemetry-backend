@@ -55,33 +55,50 @@ Ensure PostgreSQL is running and note:
 
 ## Step 2: Bootstrap the database schema
 
-The backend's `DbBootstrapper` runs automatically on every startup (the DDL is idempotent — `CREATE TABLE IF NOT EXISTS` and friends) and executes two embedded scripts, in order, against the existing `vfxtelemetry` database: `deploy/sql/bootstrap.sql`, then `deploy/sql/bootstrap-schema-evolution.sql` as its own separate command (kept separate from `bootstrap.sql` to avoid a lock-order deadlock against a concurrent ingest or the forget drainer — see that file's header). Together they:
+The backend's `DbBootstrapper` runs automatically on every startup against the existing database.
+Under one session advisory lock, it runs `deploy/sql/bootstrap.sql`, then
+`deploy/sql/bootstrap-schema-evolution.sql`, then configured daily partition seeding, each in a
+separate transaction. This keeps partition creation from holding `ingest_batch` locks while waiting
+for `telemetry_event`, which would reverse the forget drainer's lock order. Together these phases:
 
-1. Creates all tables: `telemetry_event` (partitioned), `ingest_batch`, `forget_queue`
-2. Creates the supporting indexes on those tables
-3. Creates functions: `ensure_partitions`, `ensure_partition`, `drop_old_partitions`, `sweep_default`
-4. Creates views: `v_step_family_daily`, `v_step_provider_daily`, `v_run_daily`
-5. Pre-creates daily partitions from 90 days ago through roughly one week ahead
+1. Create all tables: `telemetry_event` (partitioned), `ingest_batch`, `forget_queue`
+2. Create the supporting indexes on those tables
+3. Create functions: `ensure_partitions`, `ensure_partition`, `drop_old_partitions`, `sweep_default`
+4. Create views: `v_step_family_daily`, `v_step_provider_daily`, `v_run_daily`
+5. Seed `[current_date - RetentionDays, current_date + PrecreateDays)` (defaults: 90 trailing days,
+   today and six following days). A shorter retention window is respected on every restart.
 
 The bootstrap is fully idempotent and safe to re-run; it uses `CREATE TABLE IF NOT EXISTS`, `CREATE OR REPLACE FUNCTION`, etc.
 
 **Upgrading:** a backend build that adds a column (e.g. `skipped_event_lines`) takes a brief, bounded-wait exclusive lock on `telemetry_event` on its first start; upgrade the backend before any engines that report the new field, or their events land with the column reading `0` for "not reported" rather than the true count.
 
+**Partition contention:** partition seeding uses a five-second `lock_timeout` per lock wait. A long
+reader can cause startup to fail with `55P03`; the partition transaction rolls back and the advisory
+lock is released. Retry after that reader completes. Already committed schema phases remain intact.
+
 **Manual bootstrap (if you need to run it separately):**
 
 ```bash
-# Using psql (Postgres command-line client)
-psql -h localhost -U postgres -d vfxtelemetry -v ON_ERROR_STOP=1 -f deploy/sql/bootstrap.sql
-
-# Run second, as its own command: adds any column introduced after the table
-# first existed (e.g. skipped_event_lines). Kept separate from bootstrap.sql
-# to avoid a lock-order deadlock against a concurrent ingest or the forget
-# drainer (see the file's header). On an EXISTING database, running only
-# bootstrap.sql skips this column and ingest then fails.
-psql -h localhost -U postgres -d vfxtelemetry -v ON_ERROR_STOP=1 -f deploy/sql/bootstrap-schema-evolution.sql
+# Run from the repository root. Match 90 and 7 to your configured window.
+psql -h localhost -U postgres -d vfxtelemetry -v ON_ERROR_STOP=1 <<'SQL'
+SET lock_timeout = '30s';
+SELECT pg_advisory_lock(152152153);
+SET lock_timeout = DEFAULT;
+\i deploy/sql/bootstrap.sql
+\i deploy/sql/bootstrap-schema-evolution.sql
+BEGIN;
+SET LOCAL lock_timeout = '5s';
+SELECT ensure_partitions(current_date - 90, current_date + 7);
+COMMIT;
+SELECT pg_advisory_unlock(152152153);
+SQL
 ```
 
-You'll be prompted for the admin password (once per command). psql autocommits each statement, so neither script shares a transaction with the other; `-v ON_ERROR_STOP=1` makes a failed step exit non-zero instead of psql carrying on to the next statement.
+You'll be prompted for the admin password. The one psql session keeps the advisory lock across all
+phases, autocommits the schema statements, and seeds partitions in its own explicit transaction.
+`ON_ERROR_STOP=1` exits on failure; closing the session releases its advisory lock. Do not combine
+the schema scripts and partition seeding into one transaction. On an existing database, running only
+`bootstrap.sql` omits schema evolution and ingest can fail.
 
 **Create database explicitly (for non-containerised PostgreSQL):**
 

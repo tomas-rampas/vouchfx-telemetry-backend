@@ -2,7 +2,9 @@
 #pragma warning disable CA1707
 
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Npgsql;
+using Vouchfx.Telemetry.Backend.Configuration;
 using Vouchfx.Telemetry.Backend.Persistence;
 using Xunit;
 
@@ -68,7 +70,7 @@ public sealed class UpgradePathTests(PostgresFixture fixture)
         Assert.Equal(1L, await CountInPartitionAsync(defaultInstallId, "telemetry_event_default"));
 
         // 3. Run the REAL DbBootstrapper again — production's only upgrade path.
-        var bootstrapper = new DbBootstrapper(fixture.DataSource, NullLogger<DbBootstrapper>.Instance);
+        var bootstrapper = new DbBootstrapper(fixture.DataSource, NullLogger<DbBootstrapper>.Instance, Options.Create(new TelemetryOptions()));
         await bootstrapper.BootstrapAsync(CancellationToken.None);
 
         // 4a. The column exists again on the parent AND on every partition (count child
@@ -111,8 +113,8 @@ public sealed class UpgradePathTests(PostgresFixture fixture)
     /// the column already exists.
     /// </summary>
     /// <remarks>
-    /// Runs an untimed bootstrap WARM before taking the reader's lock: <c>bootstrap.sql</c>'s
-    /// final step, <c>ensure_partitions(current_date - 90, current_date + 7)</c>, pre-creates
+    /// Runs an untimed bootstrap WARM before taking the reader's lock: its separate,
+    /// configured partition-seeding phase pre-creates
     /// any partition due for "today". Without this warm-up, a UTC date rollover between the
     /// fixture's initial bootstrap and this test's timed run could make the timed run's own
     /// <c>ensure_partition</c> create a brand-new day partition WHILE the ACCESS SHARE
@@ -123,7 +125,7 @@ public sealed class UpgradePathTests(PostgresFixture fixture)
     [Fact]
     public async Task Bootstrap_WarmStart_DoesNotBlockOnConcurrentAccessShareHolder()
     {
-        var warmBootstrapper = new DbBootstrapper(fixture.DataSource, NullLogger<DbBootstrapper>.Instance);
+        var warmBootstrapper = new DbBootstrapper(fixture.DataSource, NullLogger<DbBootstrapper>.Instance, Options.Create(new TelemetryOptions()));
         await warmBootstrapper.BootstrapAsync(CancellationToken.None);
 
         await using var holderConn = await fixture.DataSource.OpenConnectionAsync();
@@ -136,7 +138,7 @@ public sealed class UpgradePathTests(PostgresFixture fixture)
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var bootstrapper = new DbBootstrapper(fixture.DataSource, NullLogger<DbBootstrapper>.Instance);
+            var bootstrapper = new DbBootstrapper(fixture.DataSource, NullLogger<DbBootstrapper>.Instance, Options.Create(new TelemetryOptions()));
             await bootstrapper.BootstrapAsync(cts.Token); // must complete well within 5s, not throw
         }
         finally

@@ -10,8 +10,8 @@
 
   <ItemGroup>
     <!-- Link bootstrap.sql and its schema-evolution companion as embedded resources so
-         DbBootstrapper can load and run them (as two separate commands/transactions —
-         see bootstrap-schema-evolution.sql's header) at runtime. -->
+         DbBootstrapper can run them as separate commands/transactions, followed by
+         configuration-aware partition seeding in a third transaction. -->
     <EmbeddedResource Include="..\..\deploy\sql\bootstrap.sql" LogicalName="bootstrap.sql" />
     <EmbeddedResource Include="..\..\deploy\sql\bootstrap-schema-evolution.sql" LogicalName="bootstrap-schema-evolution.sql" />
   </ItemGroup>

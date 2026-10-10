@@ -8,6 +8,9 @@
 *.sql  text eol=lf
 *.bicep text eol=lf
 
+# Match the C# format gate on Windows even when core.autocrlf=true.
+*.cs text eol=lf
+
 # ---------------------------------------------------------------------------
 # GOLDEN TELEMETRY FIXTURES — byte-exact engine output. NEVER convert line
 # endings: the Idempotency-Key is a SHA-256 over the exact batch bytes

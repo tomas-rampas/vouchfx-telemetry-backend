@@ -302,7 +302,7 @@ PORTAL = """<!DOCTYPE html>
       </a>
       <a class="doc-card" href="https://samples.vouchfx.io/" target="_blank" rel="noopener noreferrer">
         <span class="doc-card__k">SAMPLES</span><h3>vouchfx-samples</h3>
-        <p>Four production-grade sample applications with complete <code>.e2e.yaml</code> suites — the engine client that would, if you opt in, be the source of the events this service ingests.</p>
+        <p>Sample applications with <code>.e2e.yaml</code> suites — the engine client that would, if you opt in, be the source of the events this service ingests.</p>
       </a>
     </div>
   </section>

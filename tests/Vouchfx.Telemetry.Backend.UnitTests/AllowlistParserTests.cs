@@ -105,9 +105,8 @@ public sealed class AllowlistParserTests
         var line = ValidLine.Replace(",\"toolVersion\":\"1.0.0\"", string.Empty, StringComparison.Ordinal);
         var result = AllowlistParser.Parse([line], 500);
         var bad = Assert.IsType<ParseResult.Bad>(result);
-        // Proves this reached STJ's required-member check (not the field-presence guard,
-        // which only knows about skippedEventLines): the reason names the missing member.
-        Assert.Contains("toolVersion", bad.Reason, StringComparison.Ordinal);
+        // Required-member failures are redacted along with other STJ exceptions.
+        Assert.Equal("Line 1: invalid JSON or event shape", bad.Reason);
     }
 
     [Fact]
@@ -116,8 +115,8 @@ public sealed class AllowlistParserTests
         var line = ValidLine.Replace("\"schemaVersion\":1,", "\"schemaVersion\":1,\"unknownField\":\"surprise\",", StringComparison.Ordinal);
         var result = AllowlistParser.Parse([line], 500);
         var bad = Assert.IsType<ParseResult.Bad>(result);
-        // Proves Disallow caught it (names the unmapped property), not some other guard.
-        Assert.Contains("unknownField", bad.Reason, StringComparison.Ordinal);
+        Assert.Equal("Line 1: invalid JSON or event shape", bad.Reason);
+        Assert.DoesNotContain("unknownField", bad.Reason, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -160,13 +159,8 @@ public sealed class AllowlistParserTests
         var line = ValidLine.Replace("\"schemaVersion\":1,", "\"schemaVersion\":1,\"SkippedEventLines\":2,", StringComparison.Ordinal);
         var result = AllowlistParser.Parse([line], 500);
         var bad = Assert.IsType<ParseResult.Bad>(result);
-        // Discriminates the two possible causes of Bad here: the field-presence guard's own
-        // message only ever says "skippedEventLines" (lowercase, from its own table key),
-        // never "SkippedEventLines" — so this reason can only come from Disallow echoing the
-        // JSON property text verbatim. If a future change made the guard case-insensitive
-        // and it caught this first, this line's Bad would come from the guard instead and
-        // this assertion would fail — exactly the wrong-reason-pass class of bug.
-        Assert.Contains("SkippedEventLines", bad.Reason, StringComparison.Ordinal);
+        // STJ refuses the unmapped spelling without echoing the supplied property name.
+        Assert.Equal("Line 1: invalid JSON or event shape", bad.Reason);
     }
 
     [Fact]
@@ -201,13 +195,14 @@ public sealed class AllowlistParserTests
         // The line is built from ValidLineV2 (carries skippedEventLines), not from ValidLine
         // with schemaVersion overwritten to 2: a v2 line WITHOUT skippedEventLines is refused
         // by the field-presence guard before strict parsing runs, so it would be refused
-        // whether or not version 2 is parsed strictly. Asserting that the reason names
-        // futureField pins that the refusal comes from Disallow, not the presence guard.
+        // whether or not version 2 is parsed strictly. The fixed deserialization reason
+        // distinguishes Disallow from the separate, named field-presence guard.
         var line = ValidLineV2.Replace(
             "\"schemaVersion\":2,", "\"schemaVersion\":2,\"futureField\":\"ignored\",", StringComparison.Ordinal);
         var result = AllowlistParser.Parse([line], 500);
         var bad = Assert.IsType<ParseResult.Bad>(result);
-        Assert.Contains("futureField", bad.Reason, StringComparison.Ordinal);
+        Assert.Equal("Line 1: invalid JSON or event shape", bad.Reason);
+        Assert.DoesNotContain("futureField", bad.Reason, StringComparison.Ordinal);
     }
 
     [Fact]

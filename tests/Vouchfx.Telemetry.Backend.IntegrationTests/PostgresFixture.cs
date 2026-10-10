@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Npgsql;
 using Testcontainers.PostgreSql;
+using Vouchfx.Telemetry.Backend.Configuration;
 using Vouchfx.Telemetry.Backend.Persistence;
 using Xunit;
 
@@ -30,7 +32,7 @@ public sealed class PostgresFixture : IAsyncLifetime
         DataSource = NpgsqlDataSourceFactory.Build(ConnectionString);
 
         // Apply bootstrap.sql (idempotent DDL)
-        var bootstrapper = new DbBootstrapper(DataSource, NullLogger<DbBootstrapper>.Instance);
+        var bootstrapper = new DbBootstrapper(DataSource, NullLogger<DbBootstrapper>.Instance, Options.Create(new TelemetryOptions()));
         await bootstrapper.BootstrapAsync(CancellationToken.None);
     }
 

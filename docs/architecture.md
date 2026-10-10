@@ -286,7 +286,10 @@ GROUP BY 1, 2;
 
 #### `v_run_daily`
 
-Daily rollup: run/scenario counts, verdict sums, timing percentiles, distinct installs:
+Daily rollup: run/scenario counts, verdict sums, and distinct installs include all schema versions.
+Timing percentiles include only schema version 2, whose run-start anchor is known. Version 1 mixes
+timing definitions; future versions remain excluded until verified. On days without version-2
+events, all four timing columns are `NULL`. The existing view columns remain unchanged:
 
 ```sql
 SELECT
@@ -302,10 +305,14 @@ SELECT
     SUM(scenario_fail)                                             AS scenario_fail,
     SUM(scenario_env_error)                                        AS scenario_env_error,
     SUM(scenario_inconclusive)                                     AS scenario_inconclusive,
-    percentile_cont(0.5)  WITHIN GROUP (ORDER BY startup_ms)       AS startup_ms_p50,
-    percentile_cont(0.95) WITHIN GROUP (ORDER BY startup_ms)       AS startup_ms_p95,
-    percentile_cont(0.5)  WITHIN GROUP (ORDER BY time_to_first_test_ms) AS ttft_ms_p50,
-    percentile_cont(0.95) WITHIN GROUP (ORDER BY time_to_first_test_ms) AS ttft_ms_p95,
+    percentile_cont(0.5)  WITHIN GROUP (ORDER BY startup_ms)
+        FILTER (WHERE schema_version = 2) AS startup_ms_p50,
+    percentile_cont(0.95) WITHIN GROUP (ORDER BY startup_ms)
+        FILTER (WHERE schema_version = 2) AS startup_ms_p95,
+    percentile_cont(0.5)  WITHIN GROUP (ORDER BY time_to_first_test_ms)
+        FILTER (WHERE schema_version = 2) AS time_to_first_test_ms_p50,
+    percentile_cont(0.95) WITHIN GROUP (ORDER BY time_to_first_test_ms)
+        FILTER (WHERE schema_version = 2) AS time_to_first_test_ms_p95,
     COUNT(DISTINCT install_id)                                     AS distinct_installs
 FROM telemetry_event
 GROUP BY 1;

@@ -19,6 +19,8 @@ The vouchfx telemetry system is **privacy-allowlist-only by construction**. It d
 
 The engine enforces this allowlist at the client side; the backend enforces it again at the ingest side (strict schema validation for schema versions 1–2, the versions this backend knows). Double enforcement is defence-in-depth.
 
+Usage-map keys are validated against the frozen Core family/provider taxonomy plus `custom`, at every schema version. Unknown keys are rejected rather than stored or echoed in logs. Counts and timings must be non-negative; required reference values cannot be null. New Core taxonomy tokens require a deliberate backend allowlist update before clients send them.
+
 ## Allowed Data
 
 The backend stores only these aggregate, non-identifying metrics per run:
@@ -141,7 +143,7 @@ The `/v1/telemetry/forget` endpoint is authorized only by the shared ingest toke
   - The install ID is **not** logged by this success line
   - The idempotency key is logged (SHA-256 hex of the request body, not reversible)
   
-- **Ingest errors:** Parse errors and validation failures are logged at Information via `LogMalformedBatch`, using the refusal's `Bad.Reason` string. That reason is not a fixed, bounded message: it can carry a property name or JSON map key from the offending line; an input value (e.g. `"schemaVersion must be >= 1, got -7"`); and, for malformed JSON, a **verbatim fragment of the raw line** — `System.Text.Json`'s reader quotes the remainder of the line in its exception message once it hits an invalid literal, which has been measured to include a full `installId` and other field values, and, in one measured case, a 200,509-character reason. So the install ID **can** be logged this way. This predates issue #30 (`origin/main` already logs `ex.Message` the same way); #30 additionally routes unknown schema-version-2 field names through the same path. Redacting the logged reason (including this literal-echo case) is tracked in [tomas-rampas/vouchfx-telemetry-backend#31](https://github.com/tomas-rampas/vouchfx-telemetry-backend/issues/31).
+- **Ingest errors:** Parse errors and validation failures are logged at Information via `LogMalformedBatch`. Refusal reasons contain a line number and fixed validation text only. JSON exception messages, paths, unknown property names, map keys, and malformed literal fragments are never included. The caller receives the generic HTTP 400 response `Malformed event data.`; invalid batches never reach storage.
   
 - **Forget requests:** `"Forget request processed for <installIdPrefix>"`
   - The install ID is truncated to the first 8 characters followed by an ellipsis (e.g. `550e8400…`)
