@@ -11,7 +11,7 @@ vouchfx collects **aggregate, anonymous usage metrics** to improve the platform 
 - **Platform support matrix:** Which .NET runtime versions and tool versions are in use? This data informs when legacy versions can be retired and when new dependencies must be added.
 - **Performance baseline:** How long does a typical startup take? How much time passes before the first test runs? Trends inform optimisation priorities.
 
-Telemetry is **strictly opt-in**: nothing is collected until you explicitly run `vouchfx telemetry enable`.
+Telemetry is **strictly opt-in**. Ordinary local runs require `vouchfx telemetry enable`. In current engine source, configuring valid `VOUCHFX_TELEMETRY_ENDPOINT`, `VOUCHFX_TELEMETRY_TOKEN` and `VOUCHFX_TELEMETRY_INSTALL_ID` values together is a separate CI opt-in that bypasses the local consent store. The install ID must be a nonzero GUID. `--no-telemetry` and `VOUCHFX_NO_TELEMETRY=1` suppress either mode for the run. See [environment-configured telemetry](https://vouchfx.io/telemetry/#environment-configured-telemetry-ci) for the complete rules.
 
 ## What is sent — and what never is
 
@@ -64,7 +64,7 @@ This command:
 2. Clears the local outbox (unsent telemetry events)
 3. Asks the backend (if configured) to delete any stored data linked to your install ID
 
-Once disabled, telemetry is off and nothing is collected on future runs.
+This disables local consent for future runs. A valid CI endpoint/token/install-ID trio still provides its own opt-in independently of that local store; remove that configuration to withdraw CI consent. For either mode, `--no-telemetry` or `VOUCHFX_NO_TELEMETRY=1` suppresses telemetry for the run.
 
 ### Per-run opt-out
 
