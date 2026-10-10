@@ -42,7 +42,7 @@ All values are set in **Settings → Secrets and variables → Secrets** (secret
 |------|-------|-------|
 | `TELEMETRY_INGEST_TOKENS` | Comma-separated bearer tokens (at least one). Each token is a high-entropy string (minimum 32 characters, e.g. a UUID or random 32-byte hex). | `token-prod-001,token-prod-002` (no spaces after commas). On first deployment, use a PLACEHOLDER like `PLACEHOLDER_REPLACE_ME` and rotate it immediately after the first deployment succeeds. |
 | `DB_ADMIN_PASSWORD` | PostgreSQL admin password (strong, random, ≥20 chars). Must be URL-safe (no `@`, `%`, or special chars that require escaping in Npgsql connection strings). | Store securely (e.g. 1Password, Azure Key Vault, or a secrets manager). |
-| `DB_CONNECTION_STRING` | Full Npgsql connection string to the Postgres database, including hostname, port, database name, admin username, and password. Format: `Server=<host>;Port=5432;Database=vfxtelemetry;User Id=postgres;Password=<pwd>;SslMode=Require;` | See Step 2 below. |
+| `DB_CONNECTION_STRING` | Full Npgsql connection string to the Postgres database, including hostname, port, database name, admin username, and password. Format: `Server=<host>;Port=5432;Database=telemetry;User Id=vfxteladmin;Password=<pwd>;SslMode=Require;` | See Step 2 below. |
 
 **PLACEHOLDER workflow:**
 1. Set `TELEMETRY_INGEST_TOKENS` to a placeholder (e.g. `PLACEHOLDER_INITIAL`) on initial deployment
@@ -69,16 +69,18 @@ The `deploy/main.bicep` template orchestrates all resources. You have two option
 # Ensure you are logged in
 az account show
 
-# Validate the Bicep template
-az bicep build-params --file deploy/parameters/prod.bicepparam
-
-# Deploy (you must set VFX_* env vars manually)
+# Set every deploy-time variable before validating the parameter file.
+# Replace example credentials and select an image already pushed to your ACR.
 export VFX_ACR_LOGIN_SERVER="vfxtelregistry.azurecr.io"
-export VFX_IMAGE_TAG="v1.0.0"
+export VFX_IMAGE_TAG="sha-<short-sha>"  # Replace with an image tag already pushed to your ACR.
 export VFX_INGEST_TOKENS="real-token-value"
 export VFX_DB_ADMIN_PASSWORD="your-postgres-password"
-export VFX_DB_CONNECTION_STRING="Server=vfxtel-prod-pg.postgres.database.azure.com;Port=5432;Database=vfxtelemetry;User Id=postgres;Password=...;SslMode=Require;"
+export VFX_DB_CONNECTION_STRING="Server=vfxtel-prod-pg.postgres.database.azure.com;Port=5432;Database=telemetry;User Id=vfxteladmin;Password=...;SslMode=Require;"
 
+# Validate after readEnvironmentVariable() inputs are set.
+az bicep build-params --file deploy/parameters/prod.bicepparam
+
+# Deploy the selected image and Azure resources.
 az deployment group create \
   --resource-group "rg-vfx-telemetry-prod" \
   --template-file deploy/main.bicep \
@@ -90,17 +92,17 @@ az deployment group create \
 After the Postgres resource is provisioned, construct the connection string:
 
 ```
-Server=<server_hostname>;Port=5432;Database=vfxtelemetry;User Id=postgres;Password=<admin_password>;SslMode=Require;
+Server=<server_hostname>;Port=5432;Database=telemetry;User Id=vfxteladmin;Password=<admin_password>;SslMode=Require;
 ```
 
 **Values:**
-- `<server_hostname>`: Output from `az bicep build` or Bicep deployment; typically `vfxtel-prod-pg.postgres.database.azure.com`
+- `<server_hostname>`: Output from the Bicep deployment; typically `vfxtel-prod-pg.postgres.database.azure.com`
 - `<admin_password>`: The value you provided in `DB_ADMIN_PASSWORD` secret
 - `SslMode=Require`: Mandatory for Azure Postgres
 
 **Example:**
 ```
-Server=vfxtel-prod-pg.postgres.database.azure.com;Port=5432;Database=vfxtelemetry;User Id=postgres;Password=MyP@ssw0rd123!;SslMode=Require;
+Server=vfxtel-prod-pg.postgres.database.azure.com;Port=5432;Database=telemetry;User Id=vfxteladmin;Password=MyP@ssw0rd123!;SslMode=Require;
 ```
 
 Update the `DB_CONNECTION_STRING` secret in GitHub with this value before (or immediately after) deploying.
@@ -116,7 +118,7 @@ The Container App's startup sequence automatically runs `DbBootstrapper.Bootstra
 **Verification:**
 ```bash
 # Connect to Postgres (from your workstation with Postgres client installed)
-psql -h vfxtel-prod-pg.postgres.database.azure.com -U postgres -d vfxtelemetry
+psql -h vfxtel-prod-pg.postgres.database.azure.com -U vfxteladmin -d telemetry
 
 # Inside psql:
 \dt  -- list tables
@@ -215,10 +217,10 @@ curl https://vfxtel-prod-app.example.azurecontainers.io/readyz
 az containerapp logs show -g rg-vfx-telemetry-prod -n vfxtel-prod-app --tail 200 | grep -i maintenance
 
 # Connect directly to Postgres
-psql -h vfxtel-prod-pg.postgres.database.azure.com -U postgres -d vfxtelemetry -c "SELECT NOW();"
+psql -h vfxtel-prod-pg.postgres.database.azure.com -U vfxteladmin -d telemetry -c "SELECT NOW();"
 
 # Check partition status
-psql -h vfxtel-prod-pg.postgres.database.azure.com -U postgres -d vfxtelemetry \
+psql -h vfxtel-prod-pg.postgres.database.azure.com -U vfxteladmin -d telemetry \
   -c "SELECT schemaname, tablename FROM pg_tables WHERE tablename LIKE 'telemetry_event%' ORDER BY tablename;"
 ```
 
@@ -251,7 +253,7 @@ curl -v \
 **Verify the row was inserted:**
 
 ```bash
-psql -h vfxtel-prod-pg.postgres.database.azure.com -U postgres -d vfxtelemetry \
+psql -h vfxtel-prod-pg.postgres.database.azure.com -U vfxteladmin -d telemetry \
   -c "SELECT install_id, event_timestamp, schema_version FROM telemetry_event WHERE install_id = '550e8400-e29b-41d4-a716-446655440000';"
 ```
 
@@ -270,7 +272,7 @@ curl -v \
 **Verify the forget request was queued:**
 
 ```bash
-psql -h vfxtel-prod-pg.postgres.database.azure.com -U postgres -d vfxtelemetry \
+psql -h vfxtel-prod-pg.postgres.database.azure.com -U vfxteladmin -d telemetry \
   -c "SELECT install_id, requested_at, processed_at FROM forget_queue WHERE install_id = '550e8400-e29b-41d4-a716-446655440000';"
 ```
 
@@ -285,11 +287,11 @@ az containerapp restart -g rg-vfx-telemetry-prod -n vfxtel-prod-app
 **Verify the forget was processed:**
 
 ```bash
-psql -h vfxtel-prod-pg.postgres.database.azure.com -U postgres -d vfxtelemetry \
+psql -h vfxtel-prod-pg.postgres.database.azure.com -U vfxteladmin -d telemetry \
   -c "SELECT * FROM forget_queue WHERE install_id = '550e8400-e29b-41d4-a716-446655440000';"
 # processed_at should now be a recent timestamp
 
-psql -h vfxtel-prod-pg.postgres.database.azure.com -U postgres -d vfxtelemetry \
+psql -h vfxtel-prod-pg.postgres.database.azure.com -U vfxteladmin -d telemetry \
   -c "SELECT COUNT(*) FROM telemetry_event WHERE install_id = '550e8400-e29b-41d4-a716-446655440000';"
 # Should return 0 (rows deleted)
 ```
@@ -298,7 +300,7 @@ psql -h vfxtel-prod-pg.postgres.database.azure.com -U postgres -d vfxtelemetry \
 
 ```bash
 # List all partitions and their row counts
-psql -h vfxtel-prod-pg.postgres.database.azure.com -U postgres -d vfxtelemetry << 'EOF'
+psql -h vfxtel-prod-pg.postgres.database.azure.com -U vfxteladmin -d telemetry << 'EOF'
 SELECT
     schemaname,
     tablename,
@@ -315,7 +317,7 @@ EOF
 **Non-empty DEFAULT partition is a signal that the daily job is not running:**
 
 ```bash
-psql -h vfxtel-prod-pg.postgres.database.azure.com -U postgres -d vfxtelemetry \
+psql -h vfxtel-prod-pg.postgres.database.azure.com -U vfxteladmin -d telemetry \
   -c "SELECT COUNT(*) FROM telemetry_event_default;"
 ```
 
@@ -329,7 +331,7 @@ If the count is >0 and not decreasing over time, the daily maintenance job is no
 
 ```bash
 # Connect to Postgres as admin
-psql -h vfxtel-prod-pg.postgres.database.azure.com -U postgres -d vfxtelemetry
+psql -h vfxtel-prod-pg.postgres.database.azure.com -U vfxteladmin -d telemetry
 
 -- Create partitions ahead
 SELECT ensure_partitions(current_date, current_date + 7);
