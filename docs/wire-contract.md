@@ -222,4 +222,4 @@ The backend exposes two unauthenticated, rate-limit-exempt probes for Azure Cont
 
 All requests have a reasonable HTTP body read timeout enforced by the Kestrel runtime. Request-body parsing has no additional timeout beyond Kestrel's `MinRequestBodyDataRate` (default 240 bytes per second, sufficient for telemetry batches).
 
-Long-running operations (e.g. partition bootstrap on first start) happen during the readiness probe, which has a 5-second timeout before the probe fails. The service must complete schema bootstrap quickly enough to pass readiness before Container Apps begins routing traffic.
+Database schema bootstrap completes during startup, before the HTTP listener starts. After startup, `GET /readyz` checks repository availability through `IsReadyAsync`. The deployment configures health-probe timeouts separately; a probe timeout is not the bootstrap deadline. Bootstrap transactions and database lock waits have their own limits.
