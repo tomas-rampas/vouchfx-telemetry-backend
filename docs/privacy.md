@@ -73,7 +73,7 @@ An install ID is **not** a user ID or device ID. Deleting it severs the link bet
 
 **Rationale:** The 35-day window accounts for the client's 30-day outbox cap (maximum time a client retains unsent batches) plus 5 days of Polly exponential back-off headroom. This ensures that a legitimate client retry will find the dedup record and be safely de-duplicated.
 
-**Consequence:** After 35 days, a batch's dedup record is deleted, and a very late retry (unlikely) would be treated as a new batch. This is acceptable because the original data is also aged out of the active store.
+**Consequence:** When a batch's dedup record expires, a late retry is treated as a new batch at the batch-dedup layer. Event rows have a separate retention window (90 days by default), so dedup expiry does not erase the original telemetry. [Row-level natural-key deduplication](wire-contract.md#layer-2-row-level-dedup-natural-key) still applies to retained events. Both retention windows are independently configurable.
 
 ### Point-in-Time Restore Backups (Azure)
 
