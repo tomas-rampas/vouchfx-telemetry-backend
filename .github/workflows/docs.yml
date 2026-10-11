@@ -29,12 +29,15 @@ jobs:
       - name: Install build dependencies
         run: |
           python -m pip install markdown==3.10.2 pygments==2.20.0 \
-            "vouchfx-site-tools @ git+https://github.com/tomas-rampas/vouchfx.git@ee33453435e7f1ff152cbf2f493349d5da2e4144#subdirectory=scripts/site-tools"
+            "vouchfx-site-tools @ git+https://github.com/tomas-rampas/vouchfx.git@953ae700cfc2fad8614739f28d6ac078af4fb584#subdirectory=scripts/site-tools"
 
       - name: Build site (landing page + rendered docs)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python scripts/build_site.py _site
+
+      - name: Check private identifiers
+        run: python -m vouchfx_site_tools.check_private_identifiers _site
 
       - name: Check social card
         run: python -m vouchfx_site_tools.check_social_card _site https://telemetry.vouchfx.io/

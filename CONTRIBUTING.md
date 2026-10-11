@@ -91,12 +91,18 @@ Install the Python dependencies and immutable `vouchfx-site-tools` revision from
 
 ```sh
 python scripts/build_site.py _site
+python -m vouchfx_site_tools.check_private_identifiers _site
 python -m vouchfx_site_tools.check_social_card _site https://telemetry.vouchfx.io/
 ```
 
 The read-only documentation job builds and checks the site on every pull request.
-Pages runs the same check before uploading its artefact. Both image URLs must
-resolve inside the built site on its configured origin and base path, with valid
-PNG headers, `1200x630` dimensions and a maximum size of 307,200 bytes. The check
-validates metadata and headers; it does not decode pixels or check the accent
-colour. A refusal returns exit code `1` and blocks publication.
+Pages runs both checks before uploading its artefact. The private identifier check
+scans static rendered text, text-bearing HTML metadata and published JSON,
+including markup embedded in JSON strings. Its fixed, bounded diagnostics omit
+matched text and input paths. It does not fetch frames or execute JavaScript or CSS.
+
+The separate social-card check requires both image URLs to resolve inside the
+built site on its configured origin and base path, with valid PNG headers,
+`1200x630` dimensions and a maximum size of 307,200 bytes. It validates
+metadata and headers; it does not decode pixels or check the accent colour.
+A refusal returns exit code `1` and blocks publication.
