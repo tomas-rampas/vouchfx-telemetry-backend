@@ -29,7 +29,7 @@ jobs:
       - name: Install build dependencies
         run: |
           python -m pip install markdown==3.10.2 pygments==2.20.0 \
-            "vouchfx-site-tools @ git+https://github.com/tomas-rampas/vouchfx.git@953ae700cfc2fad8614739f28d6ac078af4fb584#subdirectory=scripts/site-tools"
+            "vouchfx-site-tools @ git+https://github.com/tomas-rampas/vouchfx.git@907baa8c9891059319695b436b23ec0039b1ad04#subdirectory=scripts/site-tools"
 
       - name: Build site (landing page + rendered docs)
         env:
