@@ -3,7 +3,7 @@
 #
 # Triggers:
 #   • workflow_dispatch — manual / environment-promotion gate.
-#   • release: published — automatic on GitHub release publication.
+#   • release: published — automatic only with ENABLE_AZURE_DEPLOYMENT=true.
 #
 # Authentication: Azure OIDC federated identity (azure/login@v2).
 #   No long-lived credentials are stored as GitHub secrets.  The Entra App
@@ -19,6 +19,7 @@
 #   AZURE_RESOURCE_GROUP   — Target resource group name (must already exist)
 #   ACR_LOGIN_SERVER       — ACR login server FQDN, e.g. vfxtelregistry.azurecr.io
 #   DEPLOY_ENVIRONMENT     — 'dev' or 'prod' (selects deploy/parameters/<env>.bicepparam)
+#   ENABLE_AZURE_DEPLOYMENT — Optional repository variable; 'true' enables release deploys.
 #
 # ── Required GitHub SECRETS (Settings → Secrets and variables → Secrets) ──
 #   TELEMETRY_INGEST_TOKENS — Comma-separated bearer ingest tokens.
@@ -58,6 +59,8 @@ permissions:
 jobs:
   deploy:
     name: Build image and deploy to Azure
+    # Manual dispatch explicitly requests Azure; published releases opt in by repository variable.
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'release' && vars.ENABLE_AZURE_DEPLOYMENT == 'true')
     runs-on: ubuntu-latest
     # Targets the GitHub Environment matching DEPLOY_ENVIRONMENT (enables
     # environment-level protection rules and secret scoping).

@@ -131,6 +131,7 @@ Under **Settings → Secrets and variables → Actions** create:
 | `AZURE_RESOURCE_GROUP` | Resource group name from step 1.1 |
 | `ACR_LOGIN_SERVER` | ACR FQDN from step 1.2, e.g. `vfxtelregistry.azurecr.io` |
 | `DEPLOY_ENVIRONMENT` | `dev` or `prod` — selects `parameters/<env>.bicepparam` **and** the GitHub Environment |
+| `ENABLE_AZURE_DEPLOYMENT` | Optional **repository** variable: `true` enables automatic Azure deployment on release publication. Leave unset or `false` for self-hosted releases. |
 
 ### Secrets
 
@@ -157,10 +158,18 @@ The [`Deploy` workflow](../.github/workflows/deploy.yml) builds the container im
 and runs the Bicep deployment. It triggers on:
 
 - **Manual dispatch** — repository → **Actions** → **Deploy** → **Run workflow** (branch
-  `main`). The image is tagged `sha-<short-commit>`.
-- **Release publication** — publishing a GitHub release whose tag starts with `v` and
-  matches the workflow's allowlist `^v[0-9A-Za-z.+-]+$` (semver-style, e.g. `v1.2.3` or
-  `v1.2.3-rc.1`) deploys that tag automatically; anything else fails the tag-validation step.
+  `main`) explicitly requests Azure deployment, independently of `ENABLE_AZURE_DEPLOYMENT`.
+  Configure the Azure variables, secrets and environment first. The image is tagged
+  `sha-<short-commit>`.
+- **Release publication (opt-in)** — set the **repository** variable
+  `ENABLE_AZURE_DEPLOYMENT` to `true` after configuring Azure. Publishing a GitHub release
+  whose tag starts with `v` and matches the workflow's allowlist `^v[0-9A-Za-z.+-]+$`
+  (semver-style, e.g. `v1.2.3` or `v1.2.3-rc.1`) then deploys that tag automatically;
+  anything else fails the tag-validation step.
+
+With the opt-in unset or `false`, release publication skips Azure deployment. Use the
+[Docker/PostgreSQL self-hosting guide](../docs/self-hosting.md) for a release on your own
+infrastructure.
 
 Pipeline steps: checkout → .NET setup → **Azure OIDC login** → compute image tag →
 `az acr build` (server-side, pushes `vouchfx-telemetry-backend:<tag>` and `:latest`) →
