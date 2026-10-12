@@ -21,7 +21,7 @@ interactions in this repository.
 
 ## Building and testing
 
-The .NET SDK version is pinned in `global.json` (8.0.400, `rollForward: latestFeature`).
+The .NET SDK version is pinned in `global.json` (8.0.424, `rollForward: latestFeature`).
 
 ```bash
 dotnet build Vouchfx.Telemetry.Backend.sln

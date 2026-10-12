@@ -3,7 +3,7 @@
 # ────────────────────────────────────────────────────────────────────────────────
 # Stage 1 — build
 #   Uses the full .NET SDK image to restore, build, and publish the service.
-#   global.json is copied first so the 8.0.400 (latestFeature) SDK pin from
+#   global.json is copied first so the 8.0.424 (latestFeature) SDK pin from
 #   the repo is honoured inside the build stage.
 #
 #   Only the service project is restored and published; test projects are never

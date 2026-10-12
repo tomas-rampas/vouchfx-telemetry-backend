@@ -18,7 +18,7 @@
 # this badge. An unscoped figure (~46%) misread as poor testing when the
 # uncovered bulk was integration-covered code.
 #
-# SDK version is read from global.json (8.0.400, rollForward: latestFeature).
+# SDK version is read from global.json (8.0.424, rollForward: latestFeature).
 # NuGet packages are cached keyed on all .csproj files + global.json so a
 # dependency change busts the cache while a source-only change reuses it.
 # ────────────────────────────────────────────────────────────────────────────────
