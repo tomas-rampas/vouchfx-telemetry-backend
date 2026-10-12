@@ -1,8 +1,8 @@
 # Privacy Policy & Data Handling
 
-This document describes what data the telemetry backend collects, stores, and deletes, and the privacy guarantees provided by this implementation.
+This document describes the reference implementation's allowed data and default maintenance behavior. It operates no maintainer-hosted service. Hosting, access controls, backup retention and service commitments belong to the operator.
 
-**Note:** For a user-facing overview of telemetry, opt-in/out mechanics, and data sending, see [Why telemetry & how to opt in](why-telemetry.md). This page is the authoritative home of retention windows (90 days) and deletion commitments (30 days).
+**Note:** For opt-in/out mechanics and data sending, see [Why telemetry & how to opt in](why-telemetry.md). This page describes the default 90-day retention window and forget workflow. Operators must document their configured retention, deletion deadlines and backup policies; these defaults do not establish a hosted-service SLA.
 
 ## Data Collection Principles
 
@@ -63,7 +63,7 @@ An install ID is **not** a user ID or device ID. Deleting it severs the link bet
 - Old partitions are dropped on the daily job
 - DEFAULT catch-all partition is swept (aged rows deleted, rather than dropped)
 
-**Consequence:** After 90 days, a telemetry row is no longer in the active database and is not accessible via queries.
+**Consequence:** Successful daily maintenance removes partitions beyond the configured window and sweeps aged rows from the default partition. Processing follows the configured schedule and requires a healthy maintenance job; 90 days is not an exact deletion deadline.
 
 ### Dedup Records (PostgreSQL)
 
@@ -75,18 +75,19 @@ An install ID is **not** a user ID or device ID. Deleting it severs the link bet
 
 **Consequence:** When a batch's dedup record expires, a late retry is treated as a new batch at the batch-dedup layer. Event rows have a separate retention window (90 days by default), so dedup expiry does not erase the original telemetry. [Row-level natural-key deduplication](wire-contract.md#layer-2-row-level-dedup-natural-key) still applies to retained events. Both retention windows are independently configurable.
 
-### Point-in-Time Restore Backups (Azure)
+<a id="point-in-time-restore-backups-azure"></a>
 
-**Azure-managed backup retention:** 7 days (default)
+### Point-in-Time Restore Backups
 
-**Limitation:** Point-in-time restore (PITR) backups are continuous snapshots of the PostgreSQL database. A forgotten install's rows will remain in PITR backups until the backup window rolls off (7 days later). During this window, they cannot be queried via normal SQL, but they are recoverable via PITR restore.
+Backup retention is deployment-specific. The optional Azure PostgreSQL configuration
+uses a seven-day backup window by default. If an operator enables PITR, forgotten
+rows can remain recoverable until that deployment's backup window expires, even
+after deletion from the active database.
 
-**Risk:** If a customer's forgotten install data must be permanently irrecoverable within hours (not days), PITR residue is a limitation. This is acceptable for the pilot because:
-1. The data is aggregate (low sensitivity)
-2. PITR recovery requires Azure admin access (not available to customers)
-3. Deletion is processed within ~24h (backup residue is short-lived)
-
-**Mitigation:** Keep the PITR window short for the pilot. Customers with stricter requirements would need a longer window (e.g. 30 days) or no PITR at all, with appropriate trade-offs (no point-in-time recovery for disaster recovery).
+Operators must document who can restore backups, their retention window and how
+restores handle previously received deletion requests. A requirement for faster
+irrecoverability calls for a shorter backup window or no PITR, with the corresponding
+disaster-recovery trade-off.
 
 ## Deletion (Forget) Workflow
 
@@ -114,16 +115,22 @@ An install ID is **not** a user ID or device ID. Deleting it severs the link bet
    - If all three succeed, the forget is marked processed
    - If any fails, the transaction rolls back and the forget is retried next cycle
 
-### Deletion Guarantees
+<a id="deletion-guarantees"></a>
 
-- **Public commitment (outer bound):** deletion is complete within **30 days** of the request — the
-  figure quoted across the vouchfx documentation. In practice the mechanisms below finish far sooner.
-- **Active-store SLA:** ≤24 hours (next maintenance job cycle) for deletion from live PostgreSQL
-- **Dedup-record cleanup:** Automatic within 35 days (or sooner if the daily job runs) — a forget
-  request deletes the install's dedup records in the same ≤24-hour cycle; 35 days is the routine
-  ceiling for non-forgotten batches, so it never extends the 30-day commitment above
-- **PITR residue:** Forgotten data remains in backups for up to 7 days (Azure default)
-- **Best-effort:** Backend is a backstop; clients can also request deletion directly (dual responsibility)
+### Deletion Processing and Operator Commitments
+
+- **Active store:** a received forget request is processed by the next successful
+  maintenance cycle; the default interval is 24 hours. Failed transactions remain
+  queued for a later cycle.
+- **Dedup records:** the same forget transaction deletes the install's dedup records.
+  The default 35-day retention is the separate routine policy for other batches.
+- **Backups:** removal from the active store does not erase retained backup copies.
+  The operator's backup and restore policy determines their remaining lifetime.
+- **Delivery:** the engine's forget request is best-effort. Operators must provide a
+  way to handle deletion requests that could not reach the backend.
+- **Service commitments:** an operator offering a 30-day or other deletion deadline
+  must monitor request delivery, queued work and maintenance failures. This reference
+  implementation does not guarantee a deployment's SLA.
 
 ### Why Dual Authorization Isn't Implemented (Pilot)
 
@@ -151,51 +158,54 @@ The `/v1/telemetry/forget` endpoint is authorized only by the shared ingest toke
 
 ### Log Retention
 
-Container Apps logs are sent to Log Analytics and retained according to the workspace's retention policy (configurable, default 30 days). Forgotten data may appear in logs for up to 30 days (separate from active database retention).
+For the optional Azure path, Container Apps logs are sent to Log Analytics and retained according to the configured workspace policy. Other deployments use their selected log platform. Log retention is separate from active database retention and belongs to the operator.
 
-**Mitigation (Production):** Set up log redaction rules in Log Analytics to mask install IDs in logs, or use shorter log retention (7 days).
+**Operator responsibility:** restrict log access, review emitted fields and set the log-retention window. Azure operators can configure these controls in Log Analytics.
 
 ## Third-Party Access
 
-### Microsoft Azure
+<a id="microsoft-azure"></a>
 
-The backend is deployed on Azure Container Apps and PostgreSQL Flexible Server. Azure infrastructure and operations teams have access to:
-- Container image contents (via ACR)
-- Runtime logs and metrics (via Log Analytics)
-- Database (via Azure support access, governed by Microsoft security policies)
+### Optional Microsoft Azure Deployment
 
-**SLA:** Microsoft follows Azure security policies and compliance standards (SOC2, ISO27001, etc.). Customer data is subject to Microsoft's privacy and security commitments.
+If an operator selects Azure Container Apps and PostgreSQL Flexible Server, access
+to images, operational logs and the database is governed by that deployment's Azure
+roles and service policies. The reference repository has no maintainer-hosted Azure
+instance. Operators must document the infrastructure providers and access policies
+they actually use.
 
-### GitHub Actions
+<a id="github-actions"></a>
 
-Deployment secrets (ingest tokens, database credentials) are stored as GitHub Actions secrets and are:
-- Encrypted at rest
-- Never logged
-- Only exposed to the `Deploy Bicep IaC` step
-- Not written to parameter files or version control
+### Optional GitHub Actions Deployment
 
-**Risk:** If GitHub is compromised, secrets could be exposed. Mitigate by rotating tokens/passwords regularly and using short-lived credentials where possible (e.g. Azure OIDC instead of long-lived tokens).
+When using the retained Azure deployment workflow, ingest tokens and database
+credentials are configured as GitHub Actions secrets and passed to secure Bicep
+parameters in the deployment step. They are not committed to source or parameter
+files. Self-hosting with Docker or another orchestrator does not require this path.
+
+Limit access to deployment credentials and rotate them according to the operator's
+policy. The Azure workflow uses OIDC for Azure authentication.
 
 ### Customers (Telemetry Users)
 
-Telemetry team members with access to the PostgreSQL database or Log Analytics workspace can query aggregate data. They see:
+People the operator authorizes to access PostgreSQL or its configured log platform can query aggregate data. They see:
 - Install ID (opaque GUID), version counts, verdict counts, step family/provider usage
 - No step contents, test names, captured values, or SUT details
 - Dashboard views `v_step_family_daily`, `v_step_provider_daily`, `v_run_daily` are designed for safe aggregation
 
-**Access control:** Limit database and Log Analytics access to the telemetry team (via Azure RBAC and Key Vault access policies).
+**Access control:** The operator controls database, log and secret-store permissions. The optional Azure path uses Azure roles and Key Vault access policies; other deployments need equivalent controls.
 
-## Data Sovereignty & Compliance
+<a id="data-sovereignty-compliance"></a>
 
-- **Storage location:** Determined by the Azure resource group (e.g. `East US`, `West Europe`)
-- **Encryption:** Azure-managed encryption at rest (default); HTTPS in transit
-- **Compliance:** Depends on Azure region and organization's compliance requirements (GDPR, HIPAA, SOC2, etc.)
+## Hosting and Operator Privacy Review
 
-**For GDPR compliance:**
-- The `installId` is personal data (under GDPR, a unique identifier can be personal data)
-- Deletion requests (`/v1/telemetry/forget`) satisfy the "right to be forgotten" within the active-store SLA
-- PITR backup residue should be documented in privacy policies
-- Customers should opt-in before telemetry is enabled
+- **Storage location:** determined by the operator's selected database and hosting region.
+- **Encryption:** the container serves HTTP; HTTPS requires a TLS-terminating proxy or
+  ingress. Encryption at rest depends on the selected database and storage configuration.
+- **Retention and deletion:** document the configured maintenance schedule, request-delivery
+  process, backup retention and restore procedures in the operator's privacy notice.
+- **Applicable obligations:** the operator must assess its deployment and usage requirements.
+  The reference implementation's configuration and tests do not establish legal compliance.
 
 ## Privacy by Design
 
@@ -203,10 +213,10 @@ The vouchfx telemetry backend incorporates privacy-by-design principles:
 
 1. **Data minimization:** Only aggregate counts and non-identifying metrics are stored
 2. **Purpose limitation:** Data is used only for telemetry dashboards and product analytics, not for tracking or profiling
-3. **Storage limitation:** Data is automatically deleted after 90 days (default)
-4. **User control:** Deletion is user-initiated and processed best-effort within 24 hours
+3. **Storage limitation:** The default retention window is 90 days, applied by successful maintenance
+4. **User control:** Request delivery is best-effort; received requests are processed by a successful maintenance cycle
 5. **Transparency:** This privacy policy documents exactly what is stored and how it is deleted
-6. **Encryption:** Data in transit (HTTPS) and at rest (Azure managed keys)
+6. **Encryption:** The operator configures HTTPS termination and encryption at rest
 
 ## Recommendations for Production Deployment
 
@@ -218,11 +228,11 @@ Before using this backend in production, review and address:
 
 3. **Database role hardening:** Create a dedicated application role with minimal permissions instead of using the admin role (see operations runbook).
 
-4. **Log redaction:** Set up Log Analytics rules to mask or truncate install IDs in operational logs.
+4. **Log handling:** Set access and retention rules for the configured log platform; on Azure this is Log Analytics.
 
-5. **Access control:** Limit database and Key Vault access to the telemetry team using Azure RBAC.
+5. **Access control:** Limit database and secret-store access to authorized operators; use Azure roles when selecting the Azure path.
 
-6. **Encryption:** Consider Azure Disk Encryption or Transparent Data Encryption (TDE) for the PostgreSQL database if encryption at rest beyond Azure defaults is required.
+6. **Encryption:** Verify TLS termination and the database/storage encryption settings for the selected hosting platform.
 
 7. **Incident response:** Establish procedures for unauthorized access, data breaches, or accidental deletion.
 

@@ -9,7 +9,7 @@ The telemetry backend provides two endpoints:
 1. **`POST /v1/telemetry`** — Ingest opt-in telemetry batches from the engine client
 2. **`POST /v1/telemetry/forget`** — Enqueue deletion of a specific install's data
 
-Both endpoints require HTTP Bearer authentication via an `Authorization` header; the shared token value is deployed via Azure Key Vault at startup.
+Both endpoints require HTTP Bearer authentication via an `Authorization` header. Configure the accepted tokens with `VOUCHFX_TELEMETRY_INGEST_TOKENS`. Operators choose how to supply this configuration; the optional Azure deployment uses Key Vault-backed secret references.
 
 ## Endpoint: POST /v1/telemetry
 

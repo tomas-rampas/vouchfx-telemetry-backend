@@ -198,9 +198,9 @@ The service listens on `http://localhost:8080` by default.
 
 ### Docker Compose example
 
-```yaml
-version: '3.8'
+Use the Docker Compose v2 plugin. Save this as `compose.yaml` in the repository root:
 
+```yaml
 services:
   postgres:
     image: postgres:16
@@ -228,11 +228,15 @@ services:
         condition: service_healthy
 ```
 
-Start both services:
+From the repository root, verify the plugin and start both services:
 
 ```bash
-docker-compose up
+docker compose version
+docker compose up --build
 ```
+
+Keep this terminal running. In another terminal, wait for `GET http://localhost:8080/readyz`
+to return HTTP 200 before sending the smoke-test event below.
 
 ### Kubernetes example (Helm values file)
 

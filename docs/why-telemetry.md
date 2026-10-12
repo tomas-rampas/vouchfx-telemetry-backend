@@ -148,12 +148,12 @@ For configuration details and troubleshooting, see the [engine's telemetry refer
 
 ## Your right to be forgotten
 
-When you run `vouchfx telemetry disable`, the engine sends a **best-effort deletion request** to the backend. The backend processes the request within ~24 hours and deletes:
+When you run `vouchfx telemetry disable`, the engine sends a **best-effort deletion request** to the configured backend. A received request is processed by the next successful maintenance cycle, which runs every 24 hours by default, and deletes:
 
 1. All telemetry events linked to your install ID
 2. All batch-level dedup records linked to your install ID
 
-**Deletion commitment:** Your data is deleted from the active database within 30 days. Point-in-time restore backups (a separate Azure feature) may contain aged copies for up to 7 days, but these are not queryable or accessible without database administrator intervention.
+**Operator commitments:** the backend operator must state and monitor its deletion deadline, backup retention and restore policy. Active-store deletion does not erase retained backup copies. The optional Azure configuration uses a seven-day backup window by default; self-hosted backup behavior depends on the operator's configuration.
 
 For details on how deletion is processed and its guarantees, see [Privacy Policy § Deletion (Forget) Workflow](privacy.md#deletion-forget-workflow).
 
