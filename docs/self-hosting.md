@@ -240,10 +240,30 @@ to return HTTP 200 before sending the smoke-test event below.
 
 ### Kubernetes example (Helm values file)
 
+Cluster nodes need a registry image they can pull; the local Docker build above does not publish
+one. Build, tag, and push to your own reachable registry first. Replace the example registry and
+namespace below, authenticate to that registry, and choose a unique tag for your source build:
+
+```bash
+IMAGE_REPOSITORY="registry.example.com/your-team/vouchfx-telemetry-backend"
+IMAGE_TAG="source-$(git rev-parse --short=12 HEAD)"
+docker build -t "$IMAGE_REPOSITORY:$IMAGE_TAG" .
+docker push "$IMAGE_REPOSITORY:$IMAGE_TAG"
+```
+
+No Helm chart is shipped in this repository. These values are illustrative; adapt them to your
+chosen chart's image, environment, and probe templates. Replace `image.repository` and
+`image.tag` with the full registry repository and exact tag you pushed. For an immutable image
+reference, record the digest printed by `docker push`, use your chart's supported digest syntax,
+and verify the rendered Pod image is `registry.example.com/your-team/vouchfx-telemetry-backend@sha256:<digest>`
+with your repository and digest substituted, without an appended tag. Configure image-pull
+credentials if the registry is private. This example does not imply a public project image or a
+validated Kubernetes deployment.
+
 ```yaml
 image:
-  repository: vouchfx-telemetry-backend
-  tag: latest
+  repository: registry.example.com/your-team/vouchfx-telemetry-backend
+  tag: source-your-commit
   pullPolicy: Always
 
 replicaCount: 1
