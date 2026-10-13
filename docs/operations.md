@@ -155,7 +155,7 @@ All environment variables are configurable and have defaults. Most scenarios onl
 
 ### Tuning for Production
 
-**Higher throughput (~1000 req/sec):**
+**Higher per-token allowance (240 requests/minute):**
 ```
 VOUCHFX_TELEMETRY_RATE_PERMITS=240            # 240 req/min per token
 VOUCHFX_TELEMETRY_RATE_WINDOW_SECONDS=60      # 60-second window
