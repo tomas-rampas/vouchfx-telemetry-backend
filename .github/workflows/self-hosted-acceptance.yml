@@ -1,0 +1,61 @@
+name: Self-hosted telemetry acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      core_version:
+        description: Accepted stable public Core version (1.0.2 or later)
+        required: true
+        type: string
+      core_commit:
+        description: Independently accepted full public Core release commit
+        required: true
+        type: string
+      core_package_sha256:
+        description: Independently accepted official vouchfx NuGet package SHA-256
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    name: Production container and real public CLI transport
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout selected backend source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup .NET for the public tool
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version-file: global.json
+      - name: Run isolated self-hosted acceptance
+        env:
+          CORE_VERSION: ${{ inputs.core_version }}
+          CORE_COMMIT: ${{ inputs.core_commit }}
+          CORE_PACKAGE_SHA256: ${{ inputs.core_package_sha256 }}
+        run: |
+          python3 scripts/accept_self_hosted.py \
+            --core-version "$CORE_VERSION" \
+            --core-commit "$CORE_COMMIT" \
+            --core-package-sha256 "$CORE_PACKAGE_SHA256" \
+            --evidence-dir "$RUNNER_TEMP/telemetry-evidence"
+      - name: Locate finalized sanitized evidence
+        id: evidence
+        if: always()
+        run: |
+          if [[ -f "$RUNNER_TEMP/telemetry-evidence/published/artifact-manifest.json" ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Retain finalized sanitized evidence
+        if: always() && steps.evidence.outputs.ready == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: self-hosted-telemetry-acceptance
+          path: ${{ runner.temp }}/telemetry-evidence/published/
+          if-no-files-found: error
+          retention-days: 14
