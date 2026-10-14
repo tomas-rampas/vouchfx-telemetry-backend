@@ -386,3 +386,29 @@ See [Operations Runbook](operations.md) for the full Azure deployment workflow a
 - **Maintenance:** Run the daily job (partition cleanup, forget-queue drain) via a cron task or Kubernetes CronJob
 - **Scaling:** Tune rate limits, retention, and database resources based on load
 - **Security:** Use SSL/TLS for all connections; rotate tokens periodically; limit database access to the application user
+
+## Isolated hosted acceptance
+
+After publishing and independently checking a stable Core release (1.0.2 or later), run the
+manual **Self-hosted telemetry acceptance** workflow. Supply its public version, full release
+commit and the SHA-256 of the official `vouchfx` NuGet package. The workflow verifies the
+GitHub tag and NuGet repository metadata before installing those exact package bytes.
+
+It builds this repository's Dockerfile and checks Production Kestrel plus PostgreSQL on an
+owned network, with an ephemeral loopback-only HTTP port. It covers missing/wrong authentication,
+schema-2 fixture ingestion and replay, allowlist refusal, then actual CLI opt-in, schema-2
+transport, local opt-out and backend forget delivery. Forget processing is verified by restarting
+only the owned backend, which runs its normal startup maintenance; this does not imply immediate
+forget processing on a continuously running deployment.
+
+The artefact contains source/package identities, command exits, HTTP/SQL observations, JUnit
+results and cleanup/foreign-resource checks. A successful image build or fixture ingestion alone
+is not a real CLI transport result. `scripts/accept_self_hosted.py` refuses local or self-hosted
+runner execution; the manual workflow uses an isolated GitHub-hosted runner. Ephemeral tokens,
+PostgreSQL credentials, tool files and private CLI state are excluded from the artefact.
+
+Command output is drained concurrently, capped at 1 MiB per stream and 1.5 MiB per command.
+The run retains at most 40 MiB of raw command output, with 8 MiB reserved for cleanup.
+Overflow fails the command. Raw captures stay private; only bounded, sanitized files in the
+atomically finalized `published/` directory are uploaded. Incomplete child closure or
+sanitization refuses publication. Failed builds also recover and remove exact labelled images.
