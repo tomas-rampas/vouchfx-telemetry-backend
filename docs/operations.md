@@ -4,7 +4,7 @@ This document is the operator's guide to deploying, configuring, monitoring, and
 
 ## Deployment Overview
 
-This is a **complete, build-ready implementation** that requires operator provisioning and deployment. The repository contains no deployed backend; you must:
+This repository provides a self-hosted backend; it contains no deployed service. Choose the [Docker/PostgreSQL self-hosting guide](self-hosting.md) for your own infrastructure. The Azure deployment below is an optional alternative and requires operator provisioning:
 
 1. Create a GitHub repository (fork or new)
 2. Configure GitHub secrets and variables
@@ -40,15 +40,14 @@ All values are set in **Settings → Secrets and variables → Secrets** (secret
 
 | Name | Value | Notes |
 |------|-------|-------|
-| `TELEMETRY_INGEST_TOKENS` | Comma-separated bearer tokens (at least one). Each token is a high-entropy string (minimum 32 characters, e.g. a UUID or random 32-byte hex). | `token-prod-001,token-prod-002` (no spaces after commas). On first deployment, use a PLACEHOLDER like `PLACEHOLDER_REPLACE_ME` and rotate it immediately after the first deployment succeeds. |
+| `TELEMETRY_INGEST_TOKENS` | Comma-separated bearer tokens (at least one). Each token is a high-entropy string (minimum 32 characters, e.g. a UUID or random 32-byte hex). | Generate real random tokens before the first deployment; do not deploy predictable placeholders. Separate multiple tokens with commas. See [token generation](self-hosting.md#step-6-generate-ingest-tokens). |
 | `DB_ADMIN_PASSWORD` | PostgreSQL admin password (strong, random, ≥20 chars). Must be URL-safe (no `@`, `%`, or special chars that require escaping in Npgsql connection strings). | Store securely (e.g. 1Password, Azure Key Vault, or a secrets manager). |
 | `DB_CONNECTION_STRING` | Full Npgsql connection string to the Postgres database, including hostname, port, database name, admin username, and password. Format: `Server=<host>;Port=5432;Database=telemetry;User Id=vfxteladmin;Password=<pwd>;SslMode=Require;` | See Step 2 below. |
 
-**PLACEHOLDER workflow:**
-1. Set `TELEMETRY_INGEST_TOKENS` to a placeholder (e.g. `PLACEHOLDER_INITIAL`) on initial deployment
-2. Deploy successfully to Azure
-3. Immediately re-run the workflow with a real token value and redeploy
-4. Test the real token in a dev environment before production use
+Generate and configure the real ingest token before the first deployment. Store it in
+`TELEMETRY_INGEST_TOKENS`; verify authentication in your development environment
+before enabling production traffic. Database connection-string bootstrapping is a
+separate provisioning step; it does not require a placeholder bearer token.
 
 ## Step 2: Provision Azure Resources (Bicep)
 
