@@ -20,7 +20,10 @@ permissions:
   contents: read
 
 jobs:
+  failure-controls:
+    uses: ./.github/workflows/self-hosted-controls.yml
   acceptance:
+    needs: failure-controls
     name: Production container and real public CLI transport
     runs-on: ubuntu-24.04
     timeout-minutes: 25
