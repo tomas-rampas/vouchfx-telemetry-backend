@@ -412,3 +412,39 @@ The run retains at most 40 MiB of raw command output, with 8 MiB reserved for cl
 Overflow fails the command. Raw captures stay private; only bounded, sanitized files in the
 atomically finalized `published/` directory are uploaded. Incomplete child closure or
 sanitization refuses publication. Failed builds also recover and remove exact labelled images.
+
+### Failure-control gate
+
+The **Telemetry acceptance failure controls** workflow exercises the real acceptance helper
+with deterministic in-memory process, pipe, clock and Docker boundaries. It runs when the
+helper, harness or acceptance workflows change, and the manual production journey requires
+this job to succeed first. These controls require no Docker daemon or public Core package.
+
+The nine required controls cover stdout, stderr and aggregate overflow; dummy credentials
+during interruption; byte-redaction failure; uncertain child reap; failed builds with an IID;
+owned-image recovery without an IID; and interruption before observed EOF, including an
+exited leader with an inherited pipe. Assertions check original failures and exits, byte limits,
+owned cleanup, foreign-resource preservation and refusal to publish unsafe captures.
+
+Every run must report **9 passed, 0 failed, 0 skipped** in `results.json` and `junit.xml`.
+The workflow attempts to retain these two sanitized records even when a control fails.
+Private raw captures remain below the runner temporary directory and are never uploaded.
+Each result binds the backend source, helper and harness hashes. A passing control gate
+validates the helper failure paths; the separately bound public CLI/Production journey must
+still pass before self-hosted transport is accepted.
+
+The harness is `scripts/test_accept_self_hosted_controls.py`; it admits only the repository's
+isolated GitHub-hosted workflow. Adding the harness or reviewing its source does not establish
+a passing run. Check the workflow's retained records for the exact commit being evaluated.
+
+Control result admission compares the full backend commit and helper/harness SHA-256 hashes
+to the checked-out source. JSON schema 2 requires integer counts (booleans and floats are
+refused), exact case and original-record sets, and matching strict JUnit. Original sanitized
+record values use `utf8-json-sortkeys-compact-v1`: UTF-8 JSON with sorted keys, compact
+separators, Unicode characters preserved and non-finite numbers refused. The retained
+`canonicalSha256` binds that representation; it does not claim the private file's raw-byte hash.
+
+The hosted harness also requires 42 negative admission fixtures to refuse missing/wrong
+source hashes, altered record hashes/values/variants/paths, changed case sets or verdicts,
+and boolean/float counts. These checks mutate the actual helper result. Only results.json
+and junit.xml remain upload eligible; a passing source review is not a passing control run.
