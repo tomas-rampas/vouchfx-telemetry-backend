@@ -346,6 +346,7 @@ CONFIG = SiteConfig(
         "Self-hosted, privacy-first telemetry backend for vouchfx — the end-to-end integration "
         "testing framework. Opt-in, allowlist-only, deletable on request."
     ),
+    llms_curated=True,
 )
 
 
