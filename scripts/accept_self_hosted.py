@@ -41,6 +41,26 @@ def require(condition, message):
         raise RuntimeError(message)
 
 
+class RefuseMetadataRedirects(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        raise RuntimeError("GitHub metadata redirects are refused")
+
+
+def github_metadata(path, token):
+    require(bool(token) and not any(c.isspace() for c in token), "Require the workflow GitHub metadata token")
+    require(re.fullmatch(r"/releases/tags/v[0-9]+\.[0-9]+\.[0-9]+|/git/ref/tags/v[0-9]+\.[0-9]+\.[0-9]+|/git/tags/[0-9a-f]{40}", path)
+            is not None, "Unexpected GitHub metadata path")
+    request = urllib.request.Request("https://api.github.com/repos/" + CORE + path,
+                                     headers={"User-Agent": "vouchfx-selfhosted-acceptance"})
+    request.add_unredirected_header("Authorization", "Bearer " + token)
+    # This opener is never used for public package downloads or backend requests.
+    http = urllib.request.build_opener(urllib.request.ProxyHandler({}), RefuseMetadataRedirects())
+    with http.open(request, timeout=30) as response:
+        payload = response.read(2 * 1024 * 1024 + 1)
+        require(len(payload) <= 2 * 1024 * 1024, "Oversized public metadata response")
+        return json.loads(payload)
+
+
 def write_json(path, value):
     with path.open("x", encoding="utf-8") as stream:
         json.dump(value, stream, indent=2)
@@ -59,6 +79,10 @@ def terminate_owned_group(process, requested_signal):
 
 class Acceptance:
     def __init__(self, args):
+        # Consume the step-only token before launching any Docker, dotnet or CLI child.
+        self.github_token = os.environ.pop("VOUCHFX_ACCEPTANCE_GITHUB_TOKEN", "")
+        require(bool(self.github_token) and not any(c.isspace() for c in self.github_token),
+                "Require the workflow GitHub metadata token")
         self.args = args
         self.root = Path(args.evidence_dir).resolve()
         temporary = Path(os.environ["RUNNER_TEMP"]).resolve()
@@ -72,7 +96,7 @@ class Acceptance:
         self.owner = uuid.uuid4().hex
         self.prefix = "vfxtel-accept-" + self.owner
         self.token, self.password = secrets.token_hex(32), secrets.token_hex(32)
-        self.secrets = [self.token, self.password]
+        self.secrets = [self.token, self.password, self.github_token]
         self.commands = []
         self.capture_bytes = 0
         self.cleaning = False
@@ -357,12 +381,7 @@ class Acceptance:
     def public_cli(self):
         version, commit = self.args.core_version, self.args.core_commit
         def api(path):
-            request = urllib.request.Request("https://api.github.com/repos/" + CORE + path,
-                                             headers={"User-Agent": "vouchfx-selfhosted-acceptance"})
-            with self.http.open(request, timeout=30) as response:
-                payload = response.read(2 * 1024 * 1024 + 1)
-                require(len(payload) <= 2 * 1024 * 1024, "Oversized public metadata response")
-                return json.loads(payload)
+            return github_metadata(path, self.github_token)
         release = api("/releases/tags/v" + version)
         require(not release["draft"] and not release["prerelease"] and release["published_at"], "Require a stable published Core release")
         reference = api("/git/ref/tags/v" + version)

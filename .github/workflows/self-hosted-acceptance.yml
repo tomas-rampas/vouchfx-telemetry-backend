@@ -36,6 +36,7 @@ jobs:
           dotnet-version-file: global.json
       - name: Run isolated self-hosted acceptance
         env:
+          VOUCHFX_ACCEPTANCE_GITHUB_TOKEN: ${{ github.token }}
           CORE_VERSION: ${{ inputs.core_version }}
           CORE_COMMIT: ${{ inputs.core_commit }}
           CORE_PACKAGE_SHA256: ${{ inputs.core_package_sha256 }}

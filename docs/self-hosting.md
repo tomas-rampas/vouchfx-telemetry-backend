@@ -393,6 +393,12 @@ After publishing and independently checking a stable Core release (1.0.2 or late
 manual **Self-hosted telemetry acceptance** workflow. Supply its public version, full release
 commit and the SHA-256 of the official `vouchfx` NuGet package. The workflow verifies the
 GitHub tag and NuGet repository metadata before installing those exact package bytes.
+The step uses its automatic, read-only GitHub Actions token only for metadata lookups
+on `https://api.github.com`; authenticated redirects are refused. The token is removed
+from the process environment before child commands run and is excluded from evidence.
+Authenticated metadata lookup is not proof of anonymous artifact availability: the
+official NuGet package is still downloaded without authentication and checked against
+the independently accepted package SHA-256. No additional repository secret is needed.
 
 It builds this repository's Dockerfile and checks Production Kestrel plus PostgreSQL on an
 owned network, with an ephemeral loopback-only HTTP port. It covers missing/wrong authentication,
