@@ -170,7 +170,8 @@ class CaptureModel:
 
 
 def acceptance(helper, private_root, name):
-    result = helper.Acceptance(SimpleNamespace(evidence_dir=str(private_root / name)))
+    with patch.dict(os.environ, {"VOUCHFX_ACCEPTANCE_GITHUB_TOKEN": DUMMY_SECRET}):
+        result = helper.Acceptance(SimpleNamespace(evidence_dir=str(private_root / name)))
     result.secrets = [DUMMY_SECRET]
     return result
 

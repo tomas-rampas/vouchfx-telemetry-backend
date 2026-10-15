@@ -6,6 +6,7 @@ on:
       - scripts/accept_self_hosted.py
       - scripts/test_accept_self_hosted_controls.py
       - scripts/test_accept_self_hosted_junit.py
+      - scripts/test_accept_self_hosted_metadata.py
       - .github/workflows/self-hosted-controls.yml
       - .github/workflows/self-hosted-acceptance.yml
   push:
@@ -14,6 +15,7 @@ on:
       - scripts/accept_self_hosted.py
       - scripts/test_accept_self_hosted_controls.py
       - scripts/test_accept_self_hosted_junit.py
+      - scripts/test_accept_self_hosted_metadata.py
       - .github/workflows/self-hosted-controls.yml
       - .github/workflows/self-hosted-acceptance.yml
   workflow_dispatch:
@@ -34,6 +36,8 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
       - name: Run strict JUnit admission regressions
         run: python3 -m unittest discover -s scripts -p test_accept_self_hosted_junit.py -v
+      - name: Run metadata token confinement and public package regressions
+        run: python3 -m unittest discover -s scripts -p test_accept_self_hosted_metadata.py -v
       - name: Run failure controls without Docker or public Core
         run: |
           python3 scripts/test_accept_self_hosted_controls.py \
