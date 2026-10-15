@@ -93,6 +93,31 @@ class JUnitAdmissionTests(unittest.TestCase):
                 root.append(node)
                 controls.refused(lambda: controls.validate_junit(encoded(root)), AssertionError)
 
+    def test_supported_optional_declarations_are_admitted(self):
+        body = ET.tostring(suite(), encoding="unicode")
+        for declaration in ("", "<?xml version='1.0'?>",
+                            '<?xml version="1.0" encoding="UTF-8"?>',
+                            "<?xml version='1.0' encoding='utf-8' standalone='yes'?>",
+                            "\ufeff<?xml version='1.0' standalone='no'?>"):
+            with self.subTest(declaration=declaration):
+                controls.validate_junit((declaration + body).encode("utf-8"))
+
+    def test_unsupported_declaration_versions_are_refused(self):
+        body = ET.tostring(suite(), encoding="unicode")
+        for version in ("1.1", "2.0", ""):
+            with self.subTest(version=version):
+                xml = (f'<?xml version="{version}"?>' + body).encode("utf-8")
+                with self.assertRaisesRegex(ValueError, "XML 1.0 and UTF-8"):
+                    controls.validate_junit(xml)
+
+    def test_unsupported_declaration_encodings_are_refused(self):
+        body = ET.tostring(suite(), encoding="unicode")
+        for encoding in ("UTF-16", "UTF-16LE", "UTF-32", "ISO-8859-1"):
+            with self.subTest(encoding=encoding):
+                xml = (f'<?xml version="1.0" encoding="{encoding}"?>' + body).encode("utf-8")
+                with self.assertRaisesRegex(ValueError, "XML 1.0 and UTF-8"):
+                    controls.validate_junit(xml)
+
     def test_namespace_declarations_are_refused(self):
         for location in ("suite", "testcase"):
             for name, value in (("xmlns:unused", "urn:vouchfx:unused"), ("xmlns", "")):

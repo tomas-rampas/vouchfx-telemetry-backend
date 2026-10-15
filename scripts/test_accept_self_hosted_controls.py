@@ -702,6 +702,18 @@ def validate_junit(xml):
     text = xml.decode("utf-8")
     if "\x00" in text:
         raise ValueError("NUL-containing XML is not strict UTF-8 JUnit")
+    declaration_text = text.removeprefix("\ufeff")
+    if declaration_text.startswith("<?xml"):
+        end = declaration_text.find("?>")
+        declaration = declaration_text[:end + 2] if end != -1 else declaration_text
+        supported = re.fullmatch(
+            r"""<\?xml[ \t\r\n]+version[ \t\r\n]*=[ \t\r\n]*(["'])1\.0\1"""
+            r"""(?:[ \t\r\n]+encoding[ \t\r\n]*=[ \t\r\n]*(["'])(?i:utf-8)\2)?"""
+            r"""(?:[ \t\r\n]+standalone[ \t\r\n]*=[ \t\r\n]*(["'])(?:yes|no)\3)?[ \t\r\n]*\?>""",
+            declaration,
+        )
+        if supported is None:
+            raise ValueError("JUnit declaration must use XML 1.0 and UTF-8")
     check(DUMMY_SECRET not in text and "<!DOCTYPE" not in text and "<!ENTITY" not in text,
           "Sanitized inert UTF-8 JUnit required")
     suite = ET.fromstring(text, parser=ET.XMLParser(target=InertJUnitTreeBuilder()))
