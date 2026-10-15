@@ -93,6 +93,24 @@ class JUnitAdmissionTests(unittest.TestCase):
                 root.append(node)
                 controls.refused(lambda: controls.validate_junit(encoded(root)), AssertionError)
 
+    def test_namespace_declarations_are_refused(self):
+        for location in ("suite", "testcase"):
+            for name, value in (("xmlns:unused", "urn:vouchfx:unused"), ("xmlns", "")):
+                with self.subTest(location=location, declaration=name):
+                    root = suite()
+                    (root if location == "suite" else root[0]).set(name, value)
+                    with self.assertRaisesRegex(ValueError, "namespace declarations"):
+                        controls.validate_junit(encoded(root))
+
+    def test_bomless_utf16_documents_are_refused_before_parsing(self):
+        text = ET.tostring(suite(), encoding="unicode")
+        for encoding in ("utf-16-le", "utf-16-be"):
+            with self.subTest(encoding=encoding):
+                xml = text.encode(encoding)
+                self.assertFalse(xml.startswith((b"\xff\xfe", b"\xfe\xff")))
+                with self.assertRaisesRegex(ValueError, "NUL-containing XML"):
+                    controls.validate_junit(xml)
+
     def test_non_utf8_reports_are_refused(self):
         text = ET.tostring(suite(), encoding="unicode")
         for encoding in ("utf-16", "utf-32"):

@@ -687,6 +687,9 @@ def no_duplicate_keys(pairs):
 
 
 class InertJUnitTreeBuilder(ET.TreeBuilder):
+    def start_ns(self, prefix, uri):
+        raise ValueError("JUnit namespace declarations are not admitted")
+
     def comment(self, text):
         raise AssertionError("JUnit comments are not admitted")
 
@@ -697,6 +700,8 @@ class InertJUnitTreeBuilder(ET.TreeBuilder):
 def validate_junit(xml):
     check(len(xml) <= 128 * 1024, "Bounded JUnit required")
     text = xml.decode("utf-8")
+    if "\x00" in text:
+        raise ValueError("NUL-containing XML is not strict UTF-8 JUnit")
     check(DUMMY_SECRET not in text and "<!DOCTYPE" not in text and "<!ENTITY" not in text,
           "Sanitized inert UTF-8 JUnit required")
     suite = ET.fromstring(text, parser=ET.XMLParser(target=InertJUnitTreeBuilder()))
