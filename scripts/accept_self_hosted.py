@@ -343,16 +343,60 @@ class Acceptance:
                     "idempotencyKey": key, "responseBody": payload.decode("utf-8", errors="replace")})
         return status
 
-    def wait_ready(self):
+    def backend_identity(self):
+        require(self.containers.get("backend") == self.listener_container, "Owned backend identity changed")
+        self.owned("container", self.listener_container)
+        return self.listener_container
+
+    def refresh_endpoint(self, phase):
+        identifier = self.backend_identity()
+        ports = json.loads(self.docker("inspect", "--format", "{{json .NetworkSettings.Ports}}", identifier))
+        bindings = ports.get("8080/tcp") if isinstance(ports, dict) else None
+        require(isinstance(bindings, list) and len(bindings) == 1, "Require one backend listener binding")
+        binding = bindings[0]
+        require(isinstance(binding, dict) and set(binding) == {"HostIp", "HostPort"}
+                and binding["HostIp"] == "127.0.0.1", "Listener is not loopback-only")
+        port = binding["HostPort"]
+        require(isinstance(port, str) and re.fullmatch(r"[0-9]{1,5}", port) is not None
+                and 1 <= int(port) <= 65535, "Invalid backend listener port")
+        previous = getattr(self, "endpoint", None)
+        self.endpoint = "http://127.0.0.1:" + str(int(port))
+        write_json(self.root / ("listener-" + phase + ".json"),
+                   {"phase": phase, "ownedContainer": identifier, "previousEndpoint": previous,
+                    "endpoint": self.endpoint, "portChanged": previous is not None and previous != self.endpoint})
+
+    def restart_backend(self):
+        identifier = self.backend_identity()
+        self.docker("restart", "--time", "10", identifier, timeout=30)
+        self.refresh_endpoint("restarted")
+        self.wait_ready("restarted")
+
+    def wait_ready(self, phase):
         deadline = time.monotonic() + 90
+        attempts, last_failure = 0, None
+        def diagnostic(ready):
+            write_json(self.root / ("readiness-" + phase + ".json"),
+                       {"phase": phase, "ownedContainer": self.listener_container, "endpoint": self.endpoint,
+                        "ready": ready, "timeoutSeconds": 90, "attempts": attempts, "lastHttpFailure": last_failure})
         while time.monotonic() < deadline:
+            attempts += 1
+            path = "/readyz"
             try:
-                if self.request("/readyz") == 200:
-                    require(self.request("/healthz") == 200, "Liveness failed")
+                status = self.request(path)
+                if status == 200:
+                    path = "/healthz"
+                    status = self.request(path)
+                    if status != 200:
+                        last_failure = {"path": path, "status": status}
+                        diagnostic(False)
+                    require(status == 200, "Liveness failed")
+                    diagnostic(True)
                     return
-            except (OSError, urllib.error.URLError):
-                pass
+                last_failure = {"path": path, "status": status}
+            except (OSError, urllib.error.URLError) as error:
+                last_failure = {"path": path, "errorType": type(error).__name__}
             time.sleep(1)
+        diagnostic(False)
         raise RuntimeError("Production listener did not become ready within 90 seconds")
 
     def sql(self, statement):
@@ -513,9 +557,7 @@ class Acceptance:
         require(forgotten.get("installId") is None and not outbox.exists(), "Local CLI opt-out did not erase identity/outbox")
         require(self.request("/v1/telemetry/forget", json.dumps({"installId": fixture["installId"]}).encode(), self.token,
                              content_type="application/json") == 200, "Fixture forget enqueue failed")
-        self.owned("container", self.containers["backend"])
-        self.docker("restart", "--time", "10", self.containers["backend"], timeout=30)
-        self.wait_ready()
+        self.restart_backend()
         deadline = time.monotonic() + 60
         while time.monotonic() < deadline:
             if self.sql("SELECT count(*) FROM telemetry_event;") == "0" and self.sql("SELECT count(*) FROM ingest_batch;") == "0":
@@ -598,10 +640,9 @@ class Acceptance:
         server_version = int(self.sql("SHOW server_version_num;"))
         require(160000 <= server_version < 170000, "Require PostgreSQL 16 as documented")
         self.create_container("backend", "--env-file", str(backend_env), "--publish", "127.0.0.1::8080", self.image)
-        ports = json.loads(self.docker("inspect", "--format", "{{json .NetworkSettings.Ports}}", self.containers["backend"]))["8080/tcp"]
-        require(len(ports) == 1 and ports[0]["HostIp"] == "127.0.0.1", "Listener is not loopback-only")
-        self.endpoint = "http://127.0.0.1:" + str(int(ports[0]["HostPort"]))
-        self.wait_ready()
+        self.listener_container = self.containers["backend"]
+        self.refresh_endpoint("initial")
+        self.wait_ready("initial")
 
     def cleanup(self):
         self.cleaning = True
