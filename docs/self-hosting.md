@@ -406,6 +406,9 @@ schema-2 fixture ingestion and replay, allowlist refusal, then actual CLI opt-in
 transport, local opt-out and backend forget delivery. Forget processing is verified by restarting
 only the owned backend, which runs its normal startup maintenance; this does not imply immediate
 forget processing on a continuously running deployment.
+The helper re-inspects that same owned container's loopback port after restart, since an
+ephemeral published port can change. Evidence records the initial and restarted endpoints
+and bounded readiness diagnostics (HTTP status or exception type, without response payloads).
 
 The artefact contains source/package identities, command exits, HTTP/SQL observations, JUnit
 results and cleanup/foreign-resource checks. A successful image build or fixture ingestion alone
