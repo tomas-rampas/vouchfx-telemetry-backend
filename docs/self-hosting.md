@@ -448,3 +448,12 @@ The hosted harness also requires 42 negative admission fixtures to refuse missin
 source hashes, altered record hashes/values/variants/paths, changed case sets or verdicts,
 and boolean/float counts. These checks mutate the actual helper result. Only results.json
 and junit.xml remain upload eligible; a passing source review is not a passing control run.
+
+Strict JUnit admission accepts only UTF-8, the nine expected testcase elements and formatting
+whitespace in text/tails. It rejects the dummy credential, comments, processing instructions
+and unexpected children. The same workflow runs the pure Python regression suite before
+the nine controls. Run it locally without Docker:
+
+```sh
+python -m unittest discover -s scripts -p test_accept_self_hosted_junit.py -v
+```

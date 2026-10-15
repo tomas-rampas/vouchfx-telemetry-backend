@@ -686,6 +686,46 @@ def no_duplicate_keys(pairs):
     return result
 
 
+class InertJUnitTreeBuilder(ET.TreeBuilder):
+    def start_ns(self, prefix, uri):
+        raise ValueError("JUnit namespace declarations are not admitted")
+
+    def comment(self, text):
+        raise AssertionError("JUnit comments are not admitted")
+
+    def pi(self, target, text):
+        raise AssertionError("JUnit processing instructions are not admitted")
+
+
+def validate_junit(xml):
+    check(len(xml) <= 128 * 1024, "Bounded JUnit required")
+    text = xml.decode("utf-8")
+    if "\x00" in text:
+        raise ValueError("NUL-containing XML is not strict UTF-8 JUnit")
+    declaration_text = text.removeprefix("\ufeff")
+    if declaration_text.startswith("<?xml"):
+        end = declaration_text.find("?>")
+        declaration = declaration_text[:end + 2] if end != -1 else declaration_text
+        supported = re.fullmatch(
+            r"""<\?xml[ \t\r\n]+version[ \t\r\n]*=[ \t\r\n]*(["'])1\.0\1"""
+            r"""(?:[ \t\r\n]+encoding[ \t\r\n]*=[ \t\r\n]*(["'])(?i:utf-8)\2)?"""
+            r"""(?:[ \t\r\n]+standalone[ \t\r\n]*=[ \t\r\n]*(["'])(?:yes|no)\3)?[ \t\r\n]*\?>""",
+            declaration,
+        )
+        if supported is None:
+            raise ValueError("JUnit declaration must use XML 1.0 and UTF-8")
+    check(DUMMY_SECRET not in text and "<!DOCTYPE" not in text and "<!ENTITY" not in text,
+          "Sanitized inert UTF-8 JUnit required")
+    suite = ET.fromstring(text, parser=ET.XMLParser(target=InertJUnitTreeBuilder()))
+    check(all(not (value or "").strip(" \t\r\n")
+              for element in suite.iter() for value in (element.text, element.tail)),
+          "JUnit text and tails must contain formatting whitespace only")
+    check(suite.tag == "testsuite" and suite.attrib == {"name": "telemetry-acceptance-failure-controls",
+          "tests": "9", "failures": "0", "errors": "0", "skipped": "0"}, "Strict JUnit summary mismatch")
+    check([case.attrib for case in suite] == [{"name": name} for name in EXPECTED_CASES]
+          and all(case.tag == "testcase" and not list(case) for case in suite), "Strict JUnit cases/verdicts mismatch")
+
+
 def verify_evidence(evidence, source, helper_path, harness_path):
     path = evidence / "results.json"
     check(path.is_file() and not path.is_symlink(), "Regular result record required")
@@ -699,12 +739,7 @@ def verify_evidence(evidence, source, helper_path, harness_path):
     check(path.is_file() and not path.is_symlink() and path.stat().st_size <= 128 * 1024, "Bounded regular JUnit required")
     with path.open("rb") as stream:
         xml = stream.read(128 * 1024 + 1)
-    check(len(xml) <= 128 * 1024 and b"<!DOCTYPE" not in xml and b"<!ENTITY" not in xml, "Bounded inert XML required")
-    suite = ET.fromstring(xml)
-    check(suite.tag == "testsuite" and suite.attrib == {"name": "telemetry-acceptance-failure-controls",
-          "tests": "9", "failures": "0", "errors": "0", "skipped": "0"}, "Strict JUnit summary mismatch")
-    check([case.attrib for case in suite] == [{"name": name} for name in EXPECTED_CASES]
-          and all(case.tag == "testcase" and not list(case) for case in suite), "Strict JUnit cases/verdicts mismatch")
+    validate_junit(xml)
 
 
 def original_records(private_root, name):
