@@ -33,7 +33,7 @@ jobs:
       - name: Setup .NET for the public tool
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version-file: global.json
+          global-json-file: global.json
       - name: Run isolated self-hosted acceptance
         env:
           VOUCHFX_ACCEPTANCE_GITHUB_TOKEN: ${{ github.token }}
