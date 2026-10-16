@@ -66,6 +66,19 @@ class EndpointTests(unittest.TestCase):
         self.a.refresh_endpoint('initial')
         self.a.wait_ready('initial')
 
+    def test_repeated_monotonic_timestamp_retains_both_http_diagnostics(self):
+        self.a.endpoint = 'http://127.0.0.1:32768'
+        with patch.object(helper.time, 'monotonic_ns', return_value=123):
+            self.assertEqual(self.a.request('/readyz'), 200)
+            self.assertEqual(self.a.request('/healthz'), 200)
+
+        diagnostics = [json.loads(path.read_bytes()) for path in self.a.logs.glob('http-*.json')]
+        self.assertEqual(len(diagnostics), 2)
+        self.assertCountEqual(
+            [(item['path'], item['status']) for item in diagnostics],
+            [('/readyz', 200), ('/healthz', 200)],
+        )
+
     def test_restart_refreshes_changed_port_before_readiness_on_same_owned_container(self):
         self.initial_ready()
         self.a.restart_backend()
