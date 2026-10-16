@@ -479,7 +479,11 @@ class Acceptance:
         require(self.command([self.cli, "--version"], env=self.cli_env) == version + "+" + commit, "Installed CLI version/source mismatch")
 
     def run_cli(self, token, label):
-        env = dict(self.cli_env, VOUCHFX_TELEMETRY_TOKEN=token)
+        env = self.cli_env.copy()
+        if token is None:
+            env.pop("VOUCHFX_TELEMETRY_TOKEN", None)
+        else:
+            env["VOUCHFX_TELEMETRY_TOKEN"] = token
         junit = self.root / (label + ".junit.xml")
         self.command([self.cli, "run", str(self.suite), "--fail-on-env-error", "--fail-on-inconclusive", "--junit", str(junit)],
                      timeout=180, env=env)
@@ -523,7 +527,9 @@ class Acceptance:
                 + '    System.Console.WriteLine("' + canary + '");\n}\nfinally { client.Dispose(); }')
         self.suite.write_text('metadata:\n  name: ' + canary + '\nsteps:\n  - id: proof\n    type: script.csharp\n    code: |\n'
                               + ''.join('      ' + line + '\n' for line in body.splitlines()))
-        self.run_cli("not-the-ingest-token", "producer-refused")
+        # Capture locally without a transport: an HTTP 401 is a permanent refusal
+        # in the public CLI and correctly discards its batch.
+        self.run_cli(None, "producer-local-retained")
         outbox = self.state_dir / "telemetry-outbox.jsonl"
         lines = outbox.read_bytes().splitlines()
         require(len(lines) == 1, "Require one retained real engine telemetry event")
@@ -532,14 +538,8 @@ class Acceptance:
         require(event["installId"] == install_id and event["toolVersion"] == self.args.core_version
                 and event["engineVersion"] == self.args.core_version, "Wrong real producer identity")
         require(canary.encode() not in lines[0] and self.endpoint.encode() not in lines[0], "Suite/source/endpoint data leaked into real telemetry")
-        require(not self.rows(install_id), "The refused CLI upload persisted data")
+        require(not self.rows(install_id), "The local-only CLI run persisted remote data")
         (self.root / "engine-generated-schema2.ndjson").write_bytes(lines[0] + b"\n")
-        backoff = json.loads((self.state_dir / "telemetry-drain.json").read_bytes())
-        deadline = time.monotonic() + 120
-        next_attempt = dt.datetime.fromisoformat(backoff["nextAttemptUtc"].replace("Z", "+00:00"))
-        while dt.datetime.now(dt.timezone.utc) < next_attempt:
-            require(time.monotonic() < deadline, "Actual producer backoff exceeds the acceptance bound")
-            time.sleep(1)
         self.run_cli(self.token, "producer-delivered")
         require(not outbox.read_bytes().strip(), "Actual CLI transport did not drain its retained batch")
         rows = self.rows(install_id)
@@ -568,7 +568,7 @@ class Acceptance:
             raise RuntimeError("Production startup forget drain did not erase stored data")
         write_json(self.root / "scenario-checks.json", {"checksPassed": True, "backendSource": os.environ["GITHUB_SHA"],
                    "coreVersion": self.args.core_version, "coreCommit": self.args.core_commit,
-                   "fixtureSchema2": True, "realCliSchema2Transport": True, "idempotency": True,
+                   "fixtureSchema2": True, "realCliLocalOutboxRetention": True, "realCliSchema2Transport": True, "idempotency": True,
                    "privacyRefusal": True, "realCliOptOutAndForget": True, "forgetDrain": "actual backend startup maintenance"})
 
     def recover_build_images(self):

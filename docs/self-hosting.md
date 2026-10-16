@@ -363,7 +363,7 @@ vouchfx run …
 > ingress in front of the container. Plain `http://host:8080` is fine for local testing, but the
 > Bearer token and payload traverse cleartext, so use HTTPS for anything beyond localhost.
 
-The engine will collect telemetry during the run and attempt to POST it to your backend. If the endpoint is unreachable or the token is invalid, the engine stays silent (fail-silent guarantee) and the run completes normally; events accumulate in the local outbox and are retried on a subsequent run (the engine backs off between failed drain attempts).
+The engine collects telemetry during the run and attempts to POST batches to your backend. Transient transport failures and HTTP 408, 429, or 5xx responses keep events in the local outbox for a later retry, with backoff between failed drain attempts. Permanent refusals, including HTTP 401 from an invalid token, discard the refused batch; correct the configuration before collecting and sending new events. Telemetry failures do not change the test run's outcome, though the CLI may print a diagnostic.
 
 For full details on client-side telemetry configuration, see the [vouchfx engine's telemetry documentation](https://vouchfx.io/telemetry/).
 
@@ -403,7 +403,10 @@ the independently accepted package SHA-256. No additional repository secret is n
 It builds this repository's Dockerfile and checks Production Kestrel plus PostgreSQL on an
 owned network, with an ephemeral loopback-only HTTP port. It covers missing/wrong authentication,
 schema-2 fixture ingestion and replay, allowlist refusal, then actual CLI opt-in, schema-2
-transport, local opt-out and backend forget delivery. Forget processing is verified by restarting
+transport, local opt-out and backend forget delivery. It captures the first real CLI event with
+HTTP transport unconfigured, then a configured CLI run drains that event together with its own.
+This checks local retention and delivery, not transient-failure retry or back-off.
+Forget processing is verified by restarting
 only the owned backend, which runs its normal startup maintenance; this does not imply immediate
 forget processing on a continuously running deployment.
 The helper re-inspects that same owned container's loopback port after restart, since an
