@@ -338,7 +338,7 @@ class Acceptance:
         except urllib.error.HTTPError as response:
             status, payload = response.code, response.read(8193)
         require(len(payload) <= 8192, "Oversized HTTP response")
-        write_json(self.logs / f"http-{time.monotonic_ns()}.json",
+        write_json(self.logs / f"http-{uuid.uuid4().hex}.json",
                    {"path": path, "status": status, "authorizationPresent": token is not None,
                     "idempotencyKey": key, "responseBody": payload.decode("utf-8", errors="replace")})
         return status
