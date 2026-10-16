@@ -99,7 +99,7 @@ DOCS: list[tuple[str, str, str, str]] = [
     ("docs/why-telemetry.md", "For users", "Why telemetry, and how to opt in",
      "What is (and is never) collected, how to enable/disable, the local outbox, and the fail-silent guarantee."),
     ("docs/privacy.md", "For users", "Privacy policy & data handling",
-     "The authoritative home of the 90-day retention window and the 30-day deletion commitment."),
+     "The 90-day retention default, forget workflow, and operator responsibilities for deletion deadlines."),
 
     # Reference: the frozen wire contract and the system design behind it.
     ("docs/wire-contract.md", "Reference", "Wire contract",
@@ -241,7 +241,7 @@ PORTAL = """<!DOCTYPE html>
       </a>
       <a class="doc-card" href="docs/privacy.html">
         <span class="doc-card__k">POLICY</span><h3>Privacy policy &amp; data handling</h3>
-        <p>The authoritative home of the 90-day retention window and the 30-day deletion commitment.</p>
+        <p>The 90-day retention default, the forget workflow, and operators' responsibility to set and monitor deletion deadlines.</p>
       </a>
     </div>
   </section>

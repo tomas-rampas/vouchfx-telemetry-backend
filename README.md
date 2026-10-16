@@ -24,7 +24,9 @@ A lean **ASP.NET Core 8 minimal-API** service that:
 1. **Ingests** the opt-in JSON Lines telemetry batches the vouchfx engine already produces
    (`POST /v1/telemetry`), authenticated with a shared **Bearer** token, and stores them in
    **PostgreSQL** under a **90-day** retention policy.
-2. Honours an **install-id deletion** request (`POST /v1/telemetry/forget`) within **30 days**.
+2. Queues **install-id deletion** requests (`POST /v1/telemetry/forget`) for processing by the
+   background maintenance job. Operators set and monitor any deletion deadline; this reference
+   implementation does not guarantee a service-level deletion time.
 3. Self-maintains via a daily in-service job: partition pre-create, 90-day partition drop, and
    forget-queue drain.
 

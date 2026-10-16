@@ -154,7 +154,11 @@ The `installId` field is required and must be a valid GUID.
 
 **Body:** Empty
 
-**Semantics:** The forget request was enqueued. The backend's daily maintenance job will process the queue and delete all rows belonging to this install from `telemetry_event` and `ingest_batch` within ~24 hours (see operations guide). The service guarantees a best-effort deletion within the 30-day commitment.
+**Semantics:** The forget request was enqueued. The background maintenance job attempts to process
+queued requests on its configured interval (24 hours by default), deleting this install's rows
+from `telemetry_event` and `ingest_batch` in the same transaction. Failed attempts remain queued
+for a later cycle. This is not a deletion deadline: request delivery is best-effort, and operators
+must monitor delivery and maintenance failures and set any service commitment for their deployment.
 
 #### 4xx Client Error
 
