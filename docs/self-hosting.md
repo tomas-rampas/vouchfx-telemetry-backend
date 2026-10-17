@@ -389,6 +389,20 @@ See [Operations Runbook](operations.md) for the full Azure deployment workflow a
 
 ## Isolated hosted acceptance
 
+### Core 1.0.7 production acceptance (2026-10-17)
+
+The [production acceptance run](https://github.com/tomas-rampas/vouchfx-telemetry-backend/actions/runs/39056304661)
+completed both jobs successfully against backend main at `96d83de` and the published Core
+1.0.7 CLI. It passed schema-2 fixture ingestion and replay, real-CLI schema-2 transport and
+local outbox delivery, idempotency, allowlist and authentication refusals, CLI opt-out and
+forget delivery, and startup forget draining. The run recorded two expected HTTP 401
+authentication refusals and one HTTP 400 unallowlisted-field refusal. All nine failure
+controls passed. Cleanup preserved foreign resources and used no global cleanup.
+
+This run accepts the opt-in telemetry contract, its schema allowlist, and the local opt-out
+and forget path. It does not establish per-file opt-out behavior or Azure-hosted runtime
+behavior. Raw event values and secrets are excluded from the public evidence.
+
 After publishing and independently checking a stable Core release (1.0.2 or later), run the
 manual **Self-hosted telemetry acceptance** workflow. Supply its public version, full release
 commit and the SHA-256 of the official `vouchfx` NuGet package. The workflow verifies the
