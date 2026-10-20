@@ -420,6 +420,14 @@ schema-2 fixture ingestion and replay, allowlist refusal, then actual CLI opt-in
 transport, local opt-out and backend forget delivery. It captures the first real CLI event with
 HTTP transport unconfigured, then a configured CLI run drains that event together with its own.
 This checks local retention and delivery, not transient-failure retry or back-off.
+When accepting Core 1.1.0 or later, the helper also runs an explicit v2 suite with
+`metadata.telemetry: false` under enabled consent, first without transport and then
+with the configured token. A mixed selection combines that suite with a legacy v1
+suite and must pass both business assertions. Each run must leave the local outbox,
+persisted row count and consent/install identity unchanged. `scenario-checks.json`
+records these checks as passed only after execution; older Core releases record
+them as not applicable. This describes the acceptance procedure, not a completed
+acceptance of an unpublished release.
 Forget processing is verified by restarting
 only the owned backend, which runs its normal startup maintenance; this does not imply immediate
 forget processing on a continuously running deployment.
