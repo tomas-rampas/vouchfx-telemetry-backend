@@ -478,19 +478,53 @@ class Acceptance:
         self.cli = str(tools / "vouchfx")
         require(self.command([self.cli, "--version"], env=self.cli_env) == version + "+" + commit, "Installed CLI version/source mismatch")
 
-    def run_cli(self, token, label):
+    def run_cli(self, token, label, suite=None, expected_assertions=1):
         env = self.cli_env.copy()
         if token is None:
             env.pop("VOUCHFX_TELEMETRY_TOKEN", None)
         else:
             env["VOUCHFX_TELEMETRY_TOKEN"] = token
         junit = self.root / (label + ".junit.xml")
-        self.command([self.cli, "run", str(self.suite), "--fail-on-env-error", "--fail-on-inconclusive", "--junit", str(junit)],
+        self.command([self.cli, "run", str(self.suite if suite is None else suite), "--fail-on-env-error", "--fail-on-inconclusive", "--junit", str(junit)],
                      timeout=180, env=env)
         tests = ET.parse(junit).getroot()
         suites = [tests] if tests.tag == "testsuite" else list(tests.iter("testsuite"))
-        require(suites and sum(int(s.get("tests", "0")) for s in suites) == 1, "Require one real business assertion")
+        require(suites and sum(int(s.get("tests", "0")) for s in suites) == expected_assertions,
+                "Require the expected real business assertion count")
         require(all(int(s.get(key, "0")) == 0 for s in suites for key in ["failures", "errors", "skipped"]), "Business assertion was not an unskipped PASS")
+
+    def per_file_opt_out(self, consent, outbox, install_id):
+        checks = ["withoutTransport", "configuredTransport", "mixedSelection"]
+        if tuple(map(int, self.args.core_version.split("."))) < (1, 1, 0):
+            return dict.fromkeys(checks, "not-applicable: Core before 1.1.0")
+        original_consent = consent.read_bytes()
+        state = json.loads(original_consent)
+        require(state.get("consent") == 1 and state.get("installId") == install_id,
+                "Per-file opt-out requires enabled consent and the original install identity")
+        original_outbox = outbox.read_bytes()
+        require(not original_outbox.strip() and len(self.rows(install_id)) == 2,
+                "Per-file opt-out requires the delivered two-event baseline")
+        original_total = self.sql("SELECT count(*) FROM telemetry_event;")
+        source = self.suite.read_text()
+        require(source.startswith("metadata:\n"), "Require the generated business suite metadata")
+        opted_out = self.private / "per-file-opt-out.e2e.yaml"
+        opted_out.write_text(source.replace("metadata:\n", "metadata:\n  schemaVersion: v2\n  telemetry: false\n", 1))
+        mixed = self.private / "mixed-selection"
+        mixed.mkdir()
+        (mixed / "legacy.e2e.yaml").write_text(source)
+        (mixed / "opted-out.e2e.yaml").write_text(opted_out.read_text())
+        for token, label, suite, count in [
+                (None, "producer-file-opt-out-local", opted_out, 1),
+                (self.token, "producer-file-opt-out-configured", opted_out, 1),
+                (self.token, "producer-file-opt-out-mixed", mixed, 2)]:
+            self.run_cli(token, label, suite=suite, expected_assertions=count)
+            require(outbox.is_file() and outbox.read_bytes() == original_outbox,
+                    "Per-file opt-out appended or changed the local outbox")
+            require(len(self.rows(install_id)) == 2 and self.sql("SELECT count(*) FROM telemetry_event;") == original_total,
+                    "Per-file opt-out persisted additional remote telemetry")
+            require(consent.read_bytes() == original_consent,
+                    "Per-file opt-out changed consent or the install identity")
+        return dict.fromkeys(checks, True)
 
     def exercise(self):
         fixture = json.loads(Path("tests/Vouchfx.Telemetry.Backend.UnitTests/Fixtures/event-line-v2.json").read_bytes())
@@ -547,6 +581,7 @@ class Acceptance:
                 and row["engine_version"] == self.args.core_version for row in rows), "Real CLI did not persist both final-version schema2 events")
         self.compare_row(event, rows[0])
         require(self.sql("SELECT line_count FROM ingest_batch WHERE install_id='" + install_id + "';") == "2", "Actual transport batch count differs")
+        per_file_checks = self.per_file_opt_out(consent, outbox, install_id)
         replay_key = hashlib.sha256(lines[0]).hexdigest()
         for _ in range(2):
             require(self.request("/v1/telemetry", lines[0], self.token, replay_key) == 200, "Real payload replay failed")
@@ -569,7 +604,8 @@ class Acceptance:
         write_json(self.root / "scenario-checks.json", {"checksPassed": True, "backendSource": os.environ["GITHUB_SHA"],
                    "coreVersion": self.args.core_version, "coreCommit": self.args.core_commit,
                    "fixtureSchema2": True, "realCliLocalOutboxRetention": True, "realCliSchema2Transport": True, "idempotency": True,
-                   "privacyRefusal": True, "realCliOptOutAndForget": True, "forgetDrain": "actual backend startup maintenance"})
+                   "privacyRefusal": True, "realCliPerFileOptOut": per_file_checks,
+                   "realCliOptOutAndForget": True, "forgetDrain": "actual backend startup maintenance"})
 
     def recover_build_images(self):
         # Recover even when build wrote its IID before a checked failure/timeout.
