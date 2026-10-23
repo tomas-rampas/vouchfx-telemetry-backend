@@ -184,9 +184,13 @@ token-prod-001-abcdef123456,token-prod-002-xyz789klmn
 ```
 
 The engine passes one of these tokens in the `VOUCHFX_TELEMETRY_TOKEN` environment variable.
-To rotate tokens: update this secret in GitHub, re-run the deployment workflow, and wait for the
-Container App to restart. The tokens are read once at startup into a singleton
-(`BearerTokenValidator`, `containerApp.bicep` lines 99–100), so changes require a container restart.
+To rotate tokens: update this secret in GitHub and re-run the deployment workflow. Ensure
+that each active revision starts a new process with the updated secret; if deployment does
+not create a new revision, explicitly restart the existing active revisions using
+`az containerapp revision restart --resource-group <group> --name <app> --revision <revision>`.
+The singleton `BearerTokenValidator` captures the token list when initialised and does not
+reload it in a running process. Updating a Container Apps secret alone does not update
+existing revisions; see [Azure secret management](https://learn.microsoft.com/en-us/azure/container-apps/manage-secrets).
 
 **Verification:** In `.github/workflows/deploy.yml`:
 - Line 144: `VFX_INGEST_TOKENS: ${{ secrets.TELEMETRY_INGEST_TOKENS }}`
@@ -478,9 +482,9 @@ vouchfx telemetry disable
 ```
 
 **Documentation reference:** The engine repository's `docs/telemetry.md` documents the user-facing
-telemetry feature, consent model, and configuration. When this backend goes live, that document
-should be updated to reflect the hosted pilot endpoint (currently a placeholder). This update is
-out of scope for this handback; coordinate with the engine maintainer.
+telemetry feature, consent model, and configuration. The hosted pilot was discontinued; no
+maintainer-hosted endpoint is planned. Self-hosting operators must configure their own endpoint
+and token as described in [`docs/self-hosting.md`](../docs/self-hosting.md).
 
 ### 5.3 Batch Contents
 
@@ -593,8 +597,13 @@ If the probe returns 503, the database is unreachable. Possible reasons:
 
 - Check that the `Authorization: Bearer <token>` header is correct
 - Verify that the token is in the `TELEMETRY_INGEST_TOKENS` secret (comma-separated list)
-- If rotating tokens, update the secret and wait 1–2 minutes for the Container App to re-read
-  Key Vault
+- If rotating the GitHub deployment secret, follow §2.2: redeploy and ensure each active
+  revision restarts with the new value. A running process does not reload its token list.
+- For a separately configured, versionless Azure Key Vault secret reference, Container Apps
+  retrieves a newer version within 30 minutes and automatically restarts active revisions
+  that reference it through an environment variable. A versioned reference stays on that
+  version until explicitly changed. See [Azure secret management](https://learn.microsoft.com/en-us/azure/container-apps/manage-secrets).
+- Confirm the new token is accepted after restart before retiring the old token.
 
 ### PostgreSQL firewall error: "FATAL: no pg_hba.conf entry"
 

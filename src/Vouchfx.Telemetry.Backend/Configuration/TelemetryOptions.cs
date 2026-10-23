@@ -2,12 +2,13 @@ namespace Vouchfx.Telemetry.Backend.Configuration;
 
 /// <summary>
 /// Configuration options for the telemetry ingest surface.
-/// Bind from the "Telemetry" configuration section; individual properties
-/// are also overridable via <c>VOUCHFX_TELEMETRY_INGEST_TOKENS</c> env var.
+/// Program configures these options from flat <c>VOUCHFX_TELEMETRY_*</c> keys,
+/// including the comma-separated <c>VOUCHFX_TELEMETRY_INGEST_TOKENS</c> value.
+/// The application does not bind the <c>Telemetry</c> configuration section.
 /// </summary>
 public sealed class TelemetryOptions
 {
-    /// <summary>The configuration section name.</summary>
+    /// <summary>Legacy section name; the application uses flat configuration keys instead.</summary>
     public const string SectionName = "Telemetry";
 
     /// <summary>Bearer tokens authorised to post telemetry batches.</summary>

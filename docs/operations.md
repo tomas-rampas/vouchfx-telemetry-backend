@@ -279,9 +279,16 @@ psql -h vfxtel-prod-pg.postgres.database.azure.com -U vfxteladmin -d telemetry \
 
 ```bash
 # Option 1: Wait ~24 hours for the next job cycle
-# Option 2: Manually restart the Container App to trigger the job immediately
-az containerapp restart -g rg-vfx-telemetry-prod -n vfxtel-prod-app
+# Option 2: List active revisions, then restart the chosen revision.
+# Maintenance runs at process startup; restarting also interrupts serving replicas.
+az containerapp revision list -g rg-vfx-telemetry-prod -n vfxtel-prod-app \
+  --query "[?properties.active].name" -o tsv
+az containerapp revision restart -g rg-vfx-telemetry-prod -n vfxtel-prod-app \
+  --revision "<active-revision-name>"
 ```
+
+Replace `<active-revision-name>` with a name returned by the list command. The restart
+command is documented in the [Azure CLI revision reference](https://learn.microsoft.com/en-us/cli/azure/containerapp/revision#az-containerapp-revision-restart).
 
 **Verify the forget was processed:**
 
