@@ -184,13 +184,19 @@ token-prod-001-abcdef123456,token-prod-002-xyz789klmn
 ```
 
 The engine passes one of these tokens in the `VOUCHFX_TELEMETRY_TOKEN` environment variable.
-To rotate tokens: update this secret in GitHub and re-run the deployment workflow. Ensure
-that each active revision starts a new process with the updated secret; if deployment does
-not create a new revision, explicitly restart the existing active revisions using
-`az containerapp revision restart --resource-group <group> --name <app> --revision <revision>`.
+To rotate tokens: update this secret in GitHub and re-run the deployment workflow, which
+writes the value to Key Vault. The shipped Bicep uses a versionless Key Vault reference for
+`ingest-tokens`. Container Apps retrieves a newer secret version within 30 minutes and
+automatically restarts active revisions that reference it through an environment variable.
+Do not assume that an immediate manual restart refreshes the platform's cached secret.
 The singleton `BearerTokenValidator` captures the token list when initialised and does not
-reload it in a running process. Updating a Container Apps secret alone does not update
-existing revisions; see [Azure secret management](https://learn.microsoft.com/en-us/azure/container-apps/manage-secrets).
+reload it in a running process. Confirm that the new token is accepted after the platform
+refresh and restart before removing the old token from the configured list.
+
+For a custom deployment using a direct Container Apps secret instead of Key Vault, updating
+that secret alone does not update existing revisions: deploy a new revision or explicitly
+restart each active revision. A versioned Key Vault reference also needs its reference
+updated when rotating versions. See [Azure secret management](https://learn.microsoft.com/en-us/azure/container-apps/manage-secrets).
 
 **Verification:** In `.github/workflows/deploy.yml`:
 - Line 144: `VFX_INGEST_TOKENS: ${{ secrets.TELEMETRY_INGEST_TOKENS }}`
@@ -597,13 +603,13 @@ If the probe returns 503, the database is unreachable. Possible reasons:
 
 - Check that the `Authorization: Bearer <token>` header is correct
 - Verify that the token is in the `TELEMETRY_INGEST_TOKENS` secret (comma-separated list)
-- If rotating the GitHub deployment secret, follow §2.2: redeploy and ensure each active
-  revision restarts with the new value. A running process does not reload its token list.
-- For a separately configured, versionless Azure Key Vault secret reference, Container Apps
-  retrieves a newer version within 30 minutes and automatically restarts active revisions
-  that reference it through an environment variable. A versioned reference stays on that
-  version until explicitly changed. See [Azure secret management](https://learn.microsoft.com/en-us/azure/container-apps/manage-secrets).
-- Confirm the new token is accepted after restart before retiring the old token.
+- If rotating the GitHub deployment secret, follow §2.2: redeploy to update Key Vault,
+  then allow up to 30 minutes for the shipped versionless reference to refresh and for
+  Container Apps to restart the active revisions. A manual restart alone does not prove
+  that the platform has fetched the new version.
+- For a custom deployment using direct Container Apps secrets or versioned Key Vault
+  references, follow the corresponding update and restart instructions in §2.2.
+- Confirm the new token is accepted after refresh and restart before retiring the old token.
 
 ### PostgreSQL firewall error: "FATAL: no pg_hba.conf entry"
 
