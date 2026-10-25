@@ -85,7 +85,11 @@ internal sealed partial class ForgetQueueDrainer(
                 await markDone.ExecuteNonQueryAsync(ct);
 
                 await tx.CommitAsync(ct);
-                LogForgetDrained(logger, RedactInstallId(installId));
+                if (logger.IsEnabled(LogLevel.Information))
+                {
+                    var installIdPrefix = RedactInstallId(installId);
+                    LogForgetDrained(logger, installIdPrefix);
+                }
             }
             catch
             {
@@ -100,7 +104,11 @@ internal sealed partial class ForgetQueueDrainer(
         catch (Exception ex)
         {
             // Log and continue — the next cycle will retry unprocessed rows.
-            LogForgetFailed(logger, ex, RedactInstallId(installId));
+            if (logger.IsEnabled(LogLevel.Error))
+            {
+                var installIdPrefix = RedactInstallId(installId);
+                LogForgetFailed(logger, ex, installIdPrefix);
+            }
         }
     }
 }
