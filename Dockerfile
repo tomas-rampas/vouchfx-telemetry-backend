@@ -3,14 +3,15 @@
 # ────────────────────────────────────────────────────────────────────────────────
 # Stage 1 — build
 #   Uses the full .NET SDK image to restore, build, and publish the service.
-#   global.json is copied first so the 8.0.424 (latestFeature) SDK pin from
-#   the repo is honoured inside the build stage.
+#   global.json is copied first so the minimum SDK and major roll-forward
+#   policy are honoured inside the selected .NET 8, 9 or 10 build stage.
 #
 #   Only the service project is restored and published; test projects are never
 #   included in the image (they are excluded from the build context by
 #   .dockerignore and are not referenced by these COPY / RUN steps).
 # ────────────────────────────────────────────────────────────────────────────────
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+ARG DOTNET_VERSION=8.0
+FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS build
 WORKDIR /src
 
 # Copy SDK pin and shared MSBuild props before project files so the restore
@@ -43,7 +44,7 @@ RUN dotnet publish src/Vouchfx.Telemetry.Backend/Vouchfx.Telemetry.Backend.cspro
 
 # ────────────────────────────────────────────────────────────────────────────────
 # Stage 2 — runtime
-#   Uses the minimal ASP.NET Core 8 runtime image (~220 MB vs ~900 MB for the
+#   Uses the selected minimal ASP.NET Core runtime image (~220 MB vs ~900 MB for the
 #   SDK image) — no compilers, no SDK tooling in the shipped layer.
 #
 #   Security posture:
@@ -54,7 +55,7 @@ RUN dotnet publish src/Vouchfx.Telemetry.Backend/Vouchfx.Telemetry.Backend.cspro
 #     • TLS is terminated at the Container Apps platform ingress; the container
 #       binds plain HTTP on port 8080 (a non-privileged port).
 # ────────────────────────────────────────────────────────────────────────────────
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS runtime
 WORKDIR /app
 
 COPY --from=build /app/publish .

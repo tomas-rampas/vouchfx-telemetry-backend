@@ -27,24 +27,61 @@ permissions:
 
 jobs:
   integration:
-    name: Integration tests (Docker required)
+    name: Integration tests (Docker required)${{ matrix.dotnet != '8.0' && format(' .NET {0}', matrix.dotnet) || '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        dotnet: ['8.0', '9.0', '10.0']
+    env:
+      DOTNET_MULTILEVEL_LOOKUP: '0'
+      DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Setup .NET (reads version from global.json)
+      - name: Configure isolated SDK and apphost roots
+        run: |
+          printf 'DOTNET_INSTALL_DIR=%s/dotnet-compatibility\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'DOTNET_ROOT_X64=%s/dotnet-compatibility\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - name: Setup selected .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version-file: global.json
+          dotnet-version: ${{ matrix.dotnet }}.x
+
+      - name: Test runtime-isolation guard safety
+        shell: pwsh
+        run: ./scripts/ci/test-select-dotnet-runtime.ps1
+      - name: Keep only the selected SDK and shared frameworks
+        env:
+          EXPECTED_DOTNET: '${{ matrix.dotnet }}'
+        shell: pwsh
+        run: ./scripts/ci/select-dotnet-runtime.ps1 -ExpectedDotnet $env:EXPECTED_DOTNET
+      - name: Require selected SDK, runtimes and Docker
+        env:
+          EXPECTED_DOTNET: ${{ matrix.dotnet }}
+        run: |
+          set -euo pipefail
+          [[ "$(dotnet --version)" == "$EXPECTED_DOTNET".* ]]
+          runtimes="$(dotnet --list-runtimes)"
+          printf '%s\n' "$runtimes"
+          [[ "$runtimes" == *Microsoft.NETCore.App* ]]
+          [[ "$runtimes" == *Microsoft.AspNetCore.App* ]]
+          while read -r _framework version _location; do
+            [[ "$version" == "$EXPECTED_DOTNET".* ]]
+          done <<< "$runtimes"
+          test "$(docker info --format '{{.OSType}}')" = linux
 
       - name: Cache NuGet packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json') }}
+          key: nuget-${{ runner.os }}-net${{ matrix.dotnet }}-${{ hashFiles('**/*.csproj', 'global.json') }}
           restore-keys: |
             nuget-${{ runner.os }}-
 
@@ -55,7 +92,7 @@ jobs:
       # Testcontainers does not require a running daemon at build time, only at
       # test execution time.
       - name: Build
-        run: dotnet build Vouchfx.Telemetry.Backend.sln -c Release --no-restore
+        run: dotnet build Vouchfx.Telemetry.Backend.sln -c Release --no-restore -warnaserror
 
       - name: Run integration tests
         run: >
@@ -69,6 +106,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: integration-test-results
+          name: integration-test-results${{ matrix.dotnet != '8.0' && format('-net{0}', matrix.dotnet) || '' }}
           path: '**/*.trx'
           retention-days: 7

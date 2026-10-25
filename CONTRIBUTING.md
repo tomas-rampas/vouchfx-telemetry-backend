@@ -24,7 +24,9 @@ interactions in this repository.
 The minimum .NET SDK version is pinned in `global.json` (8.0.424, `rollForward: major`).
 Build and run with .NET 8, 9 or 10. The service and libraries retain a `net8.0` binary baseline;
 framework-dependent executables permit major runtime roll-forward. Container deployments keep
-the runtime selected by their Dockerfile.
+the runtime selected by their Dockerfile. The default container remains .NET 8; use
+`docker build --build-arg DOTNET_VERSION=10.0 -t vfxtel:net10 .` (or `9.0`) to test the
+production image on a newer runtime. CI builds and inspects all three runtime images.
 
 ```bash
 dotnet build Vouchfx.Telemetry.Backend.sln

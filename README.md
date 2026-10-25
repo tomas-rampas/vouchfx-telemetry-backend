@@ -21,7 +21,7 @@ The server half of [vouchfx](https://github.com/tomas-rampas/vouchfx)'s opt-in, 
 
 Current source builds and runs on .NET 8, 9 and 10 while retaining a `net8.0` binary
 baseline. Rebuilt executables use major-version runtime roll-forward when .NET 8
-is absent. The [compatibility matrix](.github/workflows/dotnet-compatibility.yml)
+is absent. The [compatibility matrix](https://github.com/tomas-rampas/vouchfx-telemetry-backend/blob/main/.github/workflows/dotnet-compatibility.yml)
 builds the solution and runs unit tests with each SDK/runtime installed in isolation;
 PostgreSQL integration tests remain in their dedicated workflow. Existing container
 images retain the .NET runtime bundled into their image.

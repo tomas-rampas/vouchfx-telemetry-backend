@@ -49,6 +49,15 @@ jobs:
         with:
           dotnet-version: ${{ matrix.dotnet }}.x
 
+      - name: Test runtime-isolation guard safety
+        shell: pwsh
+        run: ./scripts/ci/test-select-dotnet-runtime.ps1
+      - name: Keep only the selected SDK and shared frameworks
+        env:
+          EXPECTED_DOTNET: '${{ matrix.dotnet }}'
+        shell: pwsh
+        run: ./scripts/ci/select-dotnet-runtime.ps1 -ExpectedDotnet $env:EXPECTED_DOTNET
+
       - name: Require the selected SDK and runtime only
         env:
           EXPECTED_DOTNET: ${{ matrix.dotnet }}
@@ -76,3 +85,19 @@ jobs:
       # PostgreSQL integration tests stay in integration.yml.
       - name: Unit tests
         run: dotnet test tests/Vouchfx.Telemetry.Backend.UnitTests -c Release --no-build -p:VouchfxTestTargetFramework=net${{ matrix.dotnet }}
+
+      - name: Build the production image with the selected runtime
+        env:
+          EXPECTED_DOTNET: ${{ matrix.dotnet }}
+        run: |
+          set -euo pipefail
+          docker build --build-arg "DOTNET_VERSION=$EXPECTED_DOTNET" -t vouchfx-telemetry:compatibility .
+          runtimes="$(docker run --rm --entrypoint dotnet vouchfx-telemetry:compatibility --list-runtimes)"
+          printf '%s\n' "$runtimes"
+          [[ "$runtimes" == *Microsoft.NETCore.App* ]]
+          [[ "$runtimes" == *Microsoft.AspNetCore.App* ]]
+          while read -r _framework version _location; do
+            [[ "$version" == "$EXPECTED_DOTNET".* ]]
+          done <<< "$runtimes"
+          test -z "$(docker run --rm --entrypoint dotnet vouchfx-telemetry:compatibility --list-sdks)"
+          test "$(docker inspect --format '{{.Config.User}}' vouchfx-telemetry:compatibility)" = app
