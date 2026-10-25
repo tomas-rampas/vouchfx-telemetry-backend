@@ -1,6 +1,6 @@
 {
-  "engine_release": "v1.0.6",
-  "sdk_version": "1.0.6",
+  "engine_release": "v1.2.0",
+  "sdk_version": "1.2.0",
   "community_jsonrpc_version": "1.0.0",
   "community_provider_count": "1"
 }
