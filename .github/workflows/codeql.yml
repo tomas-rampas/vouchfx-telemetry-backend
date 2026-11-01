@@ -1,0 +1,74 @@
+# .github/workflows/codeql.yml — CodeQL static analysis
+# =============================================================================
+# Code scanning for vouchfx-telemetry-backend, aligned with the sibling vouchfx and
+# vouchfx-mcp codeql.yml (same structure, same SHA-pinned codeql-action).
+#
+# Languages scanned:
+#   - csharp: the ASP.NET Core ingest service and its unit/integration tests.
+#   - python: scripts/accept_self_hosted.py, scripts/build_site.py and tests.
+#   - actions: the workflow files themselves (script injection, over-broad
+#     token permissions, untrusted checkout in privileged triggers, etc.).
+#
+# All languages use build-mode: none (source-level extraction, no dotnet
+# build), as in vouchfx and vouchfx-mcp: the repo's own CI already gates
+# compilation, and extraction-only keeps this job fast and independent of the
+# SDK pinned in global.json.
+#
+# Pull-request runs cancel superseded runs on the same ref; push and scheduled
+# runs on main always complete so the Security tab baseline stays current.
+# =============================================================================
+
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly sweep so new query-pack releases re-scan main even when quiet.
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  analyze:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: csharp
+            build-mode: none
+          - language: python
+            build-mode: none
+          - language: actions
+            build-mode: none
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          category: "/language:${{ matrix.language }}"
