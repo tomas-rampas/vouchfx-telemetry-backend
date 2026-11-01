@@ -3,17 +3,26 @@
   <PropertyGroup>
     <RootNamespace>Vouchfx.Telemetry.Backend.IntegrationTests</RootNamespace>
     <IsTestProject>true</IsTestProject>
+    <!-- ASP.NET TestHost must match the runtime under test; the service keeps its net8.0 baseline. -->
+    <VouchfxTestTargetFramework Condition="'$(VouchfxTestTargetFramework)' == '' and $(NETCoreSdkVersion.StartsWith('9.'))">net9.0</VouchfxTestTargetFramework>
+    <VouchfxTestTargetFramework Condition="'$(VouchfxTestTargetFramework)' == '' and $(NETCoreSdkVersion.StartsWith('10.'))">net10.0</VouchfxTestTargetFramework>
+    <TargetFramework Condition="'$(VouchfxTestTargetFramework)' != ''">$(VouchfxTestTargetFramework)</TargetFramework>
+    <AspNetCoreTestingVersion>8.0.10</AspNetCoreTestingVersion>
+    <AspNetCoreTestingVersion Condition="'$(TargetFramework)' == 'net9.0'">9.0.21</AspNetCoreTestingVersion>
+    <AspNetCoreTestingVersion Condition="'$(TargetFramework)' == 'net10.0'">10.0.13</AspNetCoreTestingVersion>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
-    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.0.10" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="$(AspNetCoreTestingVersion)" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.12.0" />
+    <!-- Testcontainers' transitive 2025.1.0 is vulnerable; .NET 10 audits the full graph. -->
+    <PackageReference Include="SSH.NET" Version="2026.0.0" />
   </ItemGroup>
 
   <ItemGroup>

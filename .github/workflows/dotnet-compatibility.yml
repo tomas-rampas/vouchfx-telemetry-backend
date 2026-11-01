@@ -1,0 +1,103 @@
+# The net8.0 compatibility baseline must build and execute without a .NET 8
+# installation on the .NET 9 and 10 lanes. The existing CI retains Docker and
+# release checks; this matrix exercises the source and Docker-free runtime paths.
+name: .NET compatibility
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compatibility:
+    name: .NET ${{ matrix.dotnet }} compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        dotnet: ['8.0', '9.0', '10.0']
+    env:
+      DOTNET_MULTILEVEL_LOOKUP: '0'
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # A fresh directory prevents preinstalled SDKs/runtimes from satisfying
+      # global.json or a net8.0 testhost on a newer-runtime lane.
+      - name: Configure isolated SDK installation
+        run: printf 'DOTNET_INSTALL_DIR=%s/dotnet-compatibility\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+
+      - name: Install isolated .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: ${{ matrix.dotnet }}.x
+
+      - name: Test runtime-isolation guard safety
+        shell: pwsh
+        run: ./scripts/ci/test-select-dotnet-runtime.ps1
+      - name: Keep only the selected SDK and shared frameworks
+        env:
+          EXPECTED_DOTNET: '${{ matrix.dotnet }}'
+        shell: pwsh
+        run: ./scripts/ci/select-dotnet-runtime.ps1 -ExpectedDotnet $env:EXPECTED_DOTNET
+
+      - name: Require the selected SDK and runtime only
+        env:
+          EXPECTED_DOTNET: ${{ matrix.dotnet }}
+        run: |
+          set -euo pipefail
+          test "$(dirname "$(command -v dotnet)")" = "$DOTNET_INSTALL_DIR"
+          sdk="$(dotnet --version)"
+          [[ "$sdk" == "$EXPECTED_DOTNET".* ]]
+          runtimes="$(dotnet --list-runtimes)"
+          printf '%s\n' "$sdk" "$runtimes"
+          [[ "$runtimes" == *Microsoft.NETCore.App* ]]
+          [[ "$runtimes" == *Microsoft.AspNetCore.App* ]]
+          while read -r _framework version _location; do
+            [[ "$version" == "$EXPECTED_DOTNET".* ]]
+          done <<< "$runtimes"
+
+      - name: Restore
+        run: dotnet restore Vouchfx.Telemetry.Backend.sln -p:VouchfxTestTargetFramework=net${{ matrix.dotnet }}
+
+      - name: Build (Release, warnings as errors)
+        run: dotnet build Vouchfx.Telemetry.Backend.sln -c Release --no-restore -warnaserror -p:VouchfxTestTargetFramework=net${{ matrix.dotnet }}
+
+      # TestHost must match ASP.NET Core's runtime; only the test projects
+      # retarget. The service and its published binary remain net8.0.
+      # PostgreSQL integration tests stay in integration.yml.
+      - name: Unit tests
+        run: dotnet test tests/Vouchfx.Telemetry.Backend.UnitTests -c Release --no-build -p:VouchfxTestTargetFramework=net${{ matrix.dotnet }}
+
+      - name: Build the production image with the selected runtime
+        env:
+          EXPECTED_DOTNET: ${{ matrix.dotnet }}
+        run: |
+          set -euo pipefail
+          docker build --build-arg "DOTNET_VERSION=$EXPECTED_DOTNET" -t vouchfx-telemetry:compatibility .
+          runtimes="$(docker run --rm --entrypoint dotnet vouchfx-telemetry:compatibility --list-runtimes)"
+          printf '%s\n' "$runtimes"
+          [[ "$runtimes" == *Microsoft.NETCore.App* ]]
+          [[ "$runtimes" == *Microsoft.AspNetCore.App* ]]
+          while read -r _framework version _location; do
+            [[ "$version" == "$EXPECTED_DOTNET".* ]]
+          done <<< "$runtimes"
+          test -z "$(docker run --rm --entrypoint dotnet vouchfx-telemetry:compatibility --list-sdks)"
+          test "$(docker inspect --format '{{.Config.User}}' vouchfx-telemetry:compatibility)" = app
