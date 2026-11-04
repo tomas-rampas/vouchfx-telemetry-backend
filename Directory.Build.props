@@ -1,6 +1,8 @@
 <Project>
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
+    <!-- Keep the .NET 8 binary baseline; the service and test hosts also run on .NET 9 and 10. -->
+    <RollForward>Major</RollForward>
     <LangVersion>12.0</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

@@ -21,13 +21,30 @@ interactions in this repository.
 
 ## Building and testing
 
-The .NET SDK version is pinned in `global.json` (8.0.424, `rollForward: latestFeature`).
+The minimum .NET SDK version is pinned in `global.json` (8.0.424, `rollForward: major`).
+Build and run with .NET 8, 9 or 10. The service and libraries retain a `net8.0` binary baseline;
+framework-dependent executables permit major runtime roll-forward. Container deployments keep
+the runtime selected by their Dockerfile. The default container remains .NET 8; use
+`docker build --build-arg DOTNET_VERSION=10.0 -t vfxtel:net10 .` (or `9.0`) to test the
+production image on a newer runtime. CI builds and inspects all three runtime images.
 
 ```bash
 dotnet build Vouchfx.Telemetry.Backend.sln
 dotnet test tests/Vouchfx.Telemetry.Backend.UnitTests        # no Docker required
 dotnet test tests/Vouchfx.Telemetry.Backend.IntegrationTests # requires Docker (Testcontainers)
 ```
+
+Test projects automatically match the selected .NET 8, 9 or 10 SDK so their ASP.NET
+test host uses the same runtime. The service target remains `net8.0`. To select a
+test runtime explicitly, use the following property (with a compatible SDK installed):
+
+```bash
+dotnet test tests/Vouchfx.Telemetry.Backend.UnitTests -c Release -p:VouchfxTestTargetFramework=net9.0
+```
+
+Use `net10.0` for .NET 10. The same property applies to the integration test project.
+ASP.NET TestHost 8 lacks
+the pipe-writer support required for JSON responses on later ASP.NET runtimes.
 
 CI (`.github/workflows/ci.yml`) runs the equivalent gates on every push and pull
 request to `main`:
